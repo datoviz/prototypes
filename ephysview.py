@@ -174,10 +174,10 @@ class RawDataView:
 
     def set_xrange(self, t0, t1):
         # Top left, top right, bottom right, bottom left
-        self.v_image.data('pos', np.array([[t0, +1, 0]]), idx=0)
-        self.v_image.data('pos', np.array([[t1, +1, 0]]), idx=1)
-        self.v_image.data('pos', np.array([[t1, -1, 0]]), idx=2)
-        self.v_image.data('pos', np.array([[t0, -1, 0]]), idx=3)
+        self.v_image.data('pos', np.array([[t0, self.n_channels, 0]]), idx=0)
+        self.v_image.data('pos', np.array([[t1, self.n_channels, 0]]), idx=1)
+        self.v_image.data('pos', np.array([[t1, 0, 0]]), idx=2)
+        self.v_image.data('pos', np.array([[t0, 0, 0]]), idx=3)
 
     def set_vrange(self, vmin, vmax):
         self.v_image.data('range', np.array([vmin, vmax]))
@@ -217,6 +217,10 @@ class RawDataController:
         self.t0, self.t1 = t0, t1
         print("Set range %.3f %.3f" % (t0, t1))
 
+        # Update the positions.
+        self.v.set_xrange(t0, t1)
+
+        # Update the image.
         arr = self.m.get_raw_data(t0, t1)
         arr -= arr.mean(axis=0).astype(arr.dtype)
         self.v.set_image(arr)
@@ -245,6 +249,10 @@ class RawDataController:
             self.go_left(.25 * (self.t1 - self.t0))
         if key == 'right':
             self.go_right(.25 * (self.t1 - self.t0))
+        if key == 'home':
+            self.set_range(0, self.t1 - self.t0)
+        if key == 'end':
+            self.set_range(self.m.duration - (self.t1 - self.t0), self.m.duration)
 
 
 if __name__ == '__main__':
