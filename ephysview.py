@@ -191,7 +191,6 @@ class RawDataView:
         self.v_image.image(self.arr[:n, :])
 
 
-
 class RawDataController:
     def __init__(self, model, view):
         self.m = model
@@ -199,8 +198,13 @@ class RawDataController:
         self.t0 = 0
         self.t1 = 1
 
+        # Callbacks
         self.canvas = view.canvas
         self.canvas.connect(self.on_key_press)
+
+        # GUI
+        self.gui = self.canvas.gui("GUI")
+        self.gui.control('slider_float', 'time', vmin=0, vmax=self.m.duration)(self.on_slider)
 
     def set_range(self, t0, t1):
         assert t0 < t1
@@ -244,6 +248,12 @@ class RawDataController:
             t1 = self.m.duration
         self.set_range(t0, t1)
 
+    def go_to(self, t):
+        d = self.t1 - self.t0
+        t0 = t - d / 2
+        t1 = t + d / 2
+        self.set_range(t0, t1)
+
     def on_key_press(self, key, modifiers=()):
         if key == 'left':
             self.go_left(.25 * (self.t1 - self.t0))
@@ -253,6 +263,9 @@ class RawDataController:
             self.set_range(0, self.t1 - self.t0)
         if key == 'end':
             self.set_range(self.m.duration - (self.t1 - self.t0), self.m.duration)
+
+    def on_slider(self, value):
+        self.go_to(value)
 
 
 if __name__ == '__main__':
