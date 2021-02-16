@@ -32,12 +32,6 @@ Keyboard shortcuts:
 '''
 
 
-# def create_image(shape):
-#     image = np.zeros((shape[1], shape[0], 4), dtype=np.uint8)
-#     image[..., 3] = 255
-#     return image
-
-
 def _memmap_flat(path, dtype=None, n_channels=None, offset=0):
     path = Path(path)
     # Find the number of samples.
@@ -51,21 +45,21 @@ def _memmap_flat(path, dtype=None, n_channels=None, offset=0):
     return np.memmap(path, dtype=dtype, offset=offset, shape=shape)
 
 
-def get_scale(x):
-    return np.median(x, axis=0), x.std()
+# def get_scale(x):
+#     return np.median(x, axis=0), x.std()
 
 
-def normalize(x, scale):
-    m, s = scale
-    out = np.empty_like(x, dtype=np.float32)
-    out[...] = x
-    out -= m
-    out *= (1.0 / s)
-    out += 1
-    out *= 255 * .5
-    out[out < 0] = 0
-    out[out > 255] = 255
-    return out.astype(np.uint8)
+# def normalize(x, scale):
+#     m, s = scale
+#     out = np.empty_like(x, dtype=np.float32)
+#     out[...] = x
+#     out -= m
+#     out *= (1.0 / s)
+#     out += 1
+#     out *= 255 * .5
+#     out[out < 0] = 0
+#     out[out > 255] = 255
+#     return out.astype(np.uint8)
 
 
 def get_data_urls(eid, probe_idx=0):
@@ -159,6 +153,8 @@ class RawDataView:
         assert n_channels > 0
         self.n_channels = n_channels
 
+        self.arr = np.zeros((30_000, self.n_channels), dtype=np.int16)
+
         # Create the Visky view.
         self.canvas = canvas()
         self.panel = self.canvas.panel(controller='axes')
@@ -167,20 +163,21 @@ class RawDataView:
         self.v_image = self.panel.visual('image_cmap')
 
         # Initialize the POS prop.
-        self.set_image_range(0, 1)
+        self.set_xrange(0, 1)
+        self.set_vrange(0, 300)
 
         # Top left, top right, bottom right, bottom left
         self.v_image.data('texcoords', np.atleast_2d([0, 0]), idx=0)
-        self.v_image.data('texcoords', np.atleast_2d([1, 0]), idx=1)
+        self.v_image.data('texcoords', np.atleast_2d([0, 1]), idx=1)
         self.v_image.data('texcoords', np.atleast_2d([1, 1]), idx=2)
-        self.v_image.data('texcoords', np.atleast_2d([0, 1]), idx=3)
+        self.v_image.data('texcoords', np.atleast_2d([1, 0]), idx=3)
 
-    def set_image_range(self, t0, t1):
+    def set_xrange(self, t0, t1):
         # Top left, top right, bottom right, bottom left
-        self.v_image.data('pos', np.array([[t0, t1, 0]]), idx=0)
-        self.v_image.data('pos', np.array([[t1, t1, 0]]), idx=1)
-        self.v_image.data('pos', np.array([[t1, t0, 0]]), idx=2)
-        self.v_image.data('pos', np.array([[t0, t0, 0]]), idx=3)
+        self.v_image.data('pos', np.array([[t0, +1, 0]]), idx=0)
+        self.v_image.data('pos', np.array([[t1, +1, 0]]), idx=1)
+        self.v_image.data('pos', np.array([[t1, -1, 0]]), idx=2)
+        self.v_image.data('pos', np.array([[t0, -1, 0]]), idx=3)
 
     def set_vrange(self, vmin, vmax):
         self.v_image.data('range', np.array([vmin, vmax]))
@@ -189,19 +186,65 @@ class RawDataView:
         assert img.ndim == 2
         assert img.shape[0] > 0
         assert img.shape[1] == self.n_channels
-        self.v_image.image(img)
-        self.set_vrange(0, 300)#img.min(), img.max())
+        n = min(img.shape[0], self.arr.shape[0])
+        self.arr[:n, :] = img[:n, :]
+        self.v_image.image(self.arr[:n, :])
+
 
 
 class RawDataController:
     def __init__(self, model, view):
         self.m = model
         self.v = view
+        self.t0 = 0
+        self.t1 = 1
+
+        self.canvas = view.canvas
+        self.canvas.connect(self.on_key_press)
 
     def set_range(self, t0, t1):
+        assert t0 < t1
+        d = t1 - t0
+        assert d > 0
+        if t0 < 0:
+            t0 = 0
+            t1 = d
+        if t1 > self.m.duration:
+            t1 = self.m.duration
+            t0 = t1 - d
+        assert abs(t1 - t0 - d) < 1e-6
+        assert t0 < t1
+        self.t0, self.t1 = t0, t1
+        print("Set range %.3f %.3f" % (t0, t1))
+
         arr = self.m.get_raw_data(t0, t1)
-        self.v.set_image_range(t0, t1)
+        arr -= arr.mean(axis=0).astype(arr.dtype)
         self.v.set_image(arr)
+
+    def go_left(self, shift):
+        d = self.t1 - self.t0
+        t0 = self.t0 - shift
+        t1 = self.t1 - shift
+        if t0 < 0:
+            t0 = 0
+            t1 = d
+        assert abs(t1 - t0 - d) < 1e-6
+        self.set_range(t0, t1)
+
+    def go_right(self, shift):
+        d = self.t1 - self.t0
+        t0 = self.t0 + shift
+        t1 = self.t1 + shift
+        if t1 > self.m.duration:
+            t0 = self.m.duration - shift
+            t1 = self.m.duration
+        self.set_range(t0, t1)
+
+    def on_key_press(self, key, modifiers=()):
+        if key == 'left':
+            self.go_left(.25 * (self.t1 - self.t0))
+        if key == 'right':
+            self.go_right(.25 * (self.t1 - self.t0))
 
 
 if __name__ == '__main__':
@@ -240,19 +283,6 @@ if __name__ == '__main__':
 #         #     0,
 #         #     (self.sample + self.buffer_size) / self.sample_rate,
 #         #     self.n_channels)
-
-#     @property
-#     def duration(self):
-#         return self.n_samples / self.sample_rate
-
-#     @property
-#     def time(self):
-#         return self.sample / self.sample_rate
-
-#     def goto(self, time):
-#         self.sample = int(round(time * self.sample_rate))
-#         self.load_data()
-#         self.update_view()
 
 #     def on_key(self, key=None, modifiers=None):
 #         pass
