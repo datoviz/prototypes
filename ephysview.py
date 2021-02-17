@@ -355,6 +355,9 @@ class RawDataController:
             self.set_range(0, self.t1 - self.t0)
         if key == 'end':
             self.set_range(self.m.duration - (self.t1 - self.t0), self.m.duration)
+        self._update_control()
+
+    def _update_control(self):
         # Update the input float value.
         self.gui.set_value('time', float((self.t0 + self.t1) / 2))
 
@@ -397,5 +400,6 @@ if __name__ == '__main__':
     @c_raster.on_time_select
     def on_time_select(t):
         c_raw.go_to(t)
+        c_raw._update_control()
 
     run()
