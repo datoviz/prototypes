@@ -204,7 +204,8 @@ class RawDataController:
 
         # GUI
         self.gui = self.canvas.gui("GUI")
-        self.gui.control('slider_float', 'time', vmin=0, vmax=self.m.duration, mode='async')(self.on_slider)
+        # self.gui.demo()
+        self.gui.control('input_float', 'time', step=1, step_fast=100, mode='async')(self.on_slider)
 
     def set_range(self, t0, t1):
         assert t0 < t1
@@ -263,6 +264,8 @@ class RawDataController:
             self.set_range(0, self.t1 - self.t0)
         if key == 'end':
             self.set_range(self.m.duration - (self.t1 - self.t0), self.m.duration)
+        # Update the input float value.
+        self.gui.set_value('time', float((self.t0 + self.t1) / 2))
 
     def on_slider(self, value):
         self.go_to(value)
