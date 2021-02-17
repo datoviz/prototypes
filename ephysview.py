@@ -1,12 +1,10 @@
 """
 Python example of an interactive raw ephys data viewer.
-
-TODO:
-- top panel with another file
-- sort by different words
-- apply different filters
-
 """
+
+# -------------------------------------------------------------------------------------------------
+# Imports
+# -------------------------------------------------------------------------------------------------
 
 import logging
 import math
@@ -22,45 +20,10 @@ from datoviz import canvas, run
 logger = logging.getLogger(__name__)
 
 
-DESC = '''
-Keyboard shortcuts:
-- right/left: go to the next/previous 1s chunk
-- +/-: change the scaling
-- Home/End keys: go to start/end of the recording
-- G: enter a time in seconds as a floating point in the terminal and press Enter to jump to that time
 
-'''
-
-
-def _memmap_flat(path, dtype=None, n_channels=None, offset=0):
-    path = Path(path)
-    # Find the number of samples.
-    assert n_channels > 0
-    fsize = path.stat().st_size
-    item_size = np.dtype(dtype).itemsize
-    n_samples = (fsize - offset) // (item_size * n_channels)
-    if item_size * n_channels * n_samples != (fsize - offset):
-        raise IOError("n_channels incorrect or binary file truncated")
-    shape = (n_samples, n_channels)
-    return np.memmap(path, dtype=dtype, offset=offset, shape=shape)
-
-
-# def get_scale(x):
-#     return np.median(x, axis=0), x.std()
-
-
-# def normalize(x, scale):
-#     m, s = scale
-#     out = np.empty_like(x, dtype=np.float32)
-#     out[...] = x
-#     out -= m
-#     out *= (1.0 / s)
-#     out += 1
-#     out *= 255 * .5
-#     out[out < 0] = 0
-#     out[out > 255] = 255
-#     return out.astype(np.uint8)
-
+# -------------------------------------------------------------------------------------------------
+# Utils
+# -------------------------------------------------------------------------------------------------
 
 def get_data_urls(eid, probe_idx=0):
     # Find URL to .cbin file
@@ -87,11 +50,23 @@ one = ONE()
 # Disk cache of the downloading
 location = Path('~/.one_cache/').expanduser()
 memory = Memory(location, verbose=0)
+
 @memory.cache
 def _dl(url_cbin, url_ch, chunk_idx):
     reader = one.download_raw_partial(url_cbin, url_ch, chunk_idx, chunk_idx)
     return reader.cmeta, reader[:]
 
+
+def _is_cached(f, args, kwargs):
+    func_id, args_id = f._get_output_identifiers(*args, **kwargs)
+    return (f._check_previous_func_code(stacklevel=4)
+            and f.store_backend.contains_item([func_id, args_id]))
+
+
+
+# -------------------------------------------------------------------------------------------------
+# Raw data viewer
+# -------------------------------------------------------------------------------------------------
 
 class RawDataModel:
     def __init__(self, eid, probe_idx=0):
@@ -117,19 +92,29 @@ class RawDataModel:
         _, arr = _dl(self.url_cbin, self.url_ch, chunk_idx)
         return arr
 
+    def _get_range_chunks(self, t0, t1):
+        # Chunk idxs, assuming 1 second chunk
+        i0 = int(t0)  # in seconds
+        i1 = int(t1)  # in seconds
+
+        assert i0 >= 0
+        assert i0 <= t0
+        assert i1 <= t1
+        assert i1 < self.n_samples
+
+        return i0, i1
+
+    def is_chunk_cached(self, chunk_idx):
+        return _is_cached(_dl, (self.url_cbin, self.url_ch, chunk_idx), {})
+
     def get_raw_data(self, t0, t1):
         t0 = np.clip(t0, 0, self.duration)
         t1 = np.clip(t1, 0, self.duration)
         assert t0 < t1
         expected_samples = int(round((t1 - t0) * self.sample_rate))
 
-        # Chunk idxs, assuming 1 second chunk
-        i0 = int(t0)  # in seconds
-        i1 = int(t1)  # in seconds
-        assert i0 >= 0
-        assert i0 <= t0
-        assert i1 <= t1
-        assert i1 < self.n_samples
+        # Find the chunks.
+        i0, i1 = self._get_range_chunks(t0, t1)
 
         # Download the chunks.
         arr = np.vstack([self._download_chunk(i) for i in range(i0, i1 + 1)])
@@ -146,6 +131,7 @@ class RawDataModel:
         out = arr[s0:s1, :]
         assert out.shape == (expected_samples, self.n_channels)
         return out
+
 
 
 class RawDataView:
@@ -191,7 +177,10 @@ class RawDataView:
         self.v_image.image(self.arr[:n, :])
 
 
+
 class RawDataController:
+    _is_fetching = False
+
     def __init__(self, model, view):
         self.m = model
         self.v = view
@@ -208,6 +197,8 @@ class RawDataController:
         self.gui.control('input_float', 'time', step=1, step_fast=100, mode='async')(self.on_slider)
 
     def set_range(self, t0, t1):
+        if self._is_fetching:
+            return
         assert t0 < t1
         d = t1 - t0
         assert d > 0
@@ -225,9 +216,21 @@ class RawDataController:
         # Update the positions.
         self.v.set_xrange(t0, t1)
 
-        # Update the image.
+        # If fetching from the Internet, clear the array until we have the data.
+        i0, i1 = self.m._get_range_chunks(t0, t1)
+        arr = np.zeros((int((t1 - t0) * self.m.sample_rate), self.m.n_channels), dtype=np.int16)
+        if not self.m.is_chunk_cached(i0) or not self.m.is_chunk_cached(i1):
+            self.v.set_image(arr)
+
+        # Fetch the raw data, SLOW when fetching from the Internet.
+        self._is_fetching = True
         arr = self.m.get_raw_data(t0, t1)
+        self._is_fetching = False
+
+        # CAR
         arr -= arr.mean(axis=0).astype(arr.dtype)
+
+        # Update the image.
         self.v.set_image(arr)
 
     def go_left(self, shift):
@@ -271,6 +274,11 @@ class RawDataController:
         self.go_to(value)
 
 
+
+# -------------------------------------------------------------------------------------------------
+# Entry point
+# -------------------------------------------------------------------------------------------------
+
 if __name__ == '__main__':
 
     eid = 'd33baf74-263c-4b37-a0d0-b79dcb80a764'
@@ -287,96 +295,3 @@ if __name__ == '__main__':
     c.set_range(0, .1)
 
     run()
-
-#         # Load the data and put it on the GPU.
-#         self.load_data()
-#         self.update_view()
-
-#         # # Interactivity bindings.
-#         # self.canvas.on_key(self.on_key)
-#         # self.canvas.on_mouse(self.on_mouse)
-#         # self.canvas.on_prompt(self.on_prompt)
-
-#     def update_view(self):
-#         self.scale = scale = self.scale or get_scale(self.arr_buf)
-#         self.image[..., :3] = normalize(
-#             self.arr_buf, scale).T[:, :, np.newaxis]
-#         self.v_image.image(self.image)
-#         # self.panel.axes_range(
-#         #     self.sample / self.sample_rate,
-#         #     0,
-#         #     (self.sample + self.buffer_size) / self.sample_rate,
-#         #     self.n_channels)
-
-#     def on_key(self, key=None, modifiers=None):
-#         pass
-#         # delta = .1 * self.buffer_size / self.sample_rate
-#         # if key == 'left':
-#         #     self.goto(self.time - delta)
-#         # elif key == 'right':
-#         #     self.goto(self.time + delta)
-#         # elif key == '+':
-#         #     self.scale = (self.scale[0], self.scale[1] / 1.1)
-#         #     self.update_view()
-#         # elif key == '-':
-#         #     self.scale = (self.scale[0], self.scale[1] * 1.1)
-#         #     self.update_view()
-#         # elif key == 'home':
-#         #     self.goto(0)
-#         # elif key == 'end':
-#         #     self.goto(self.duration)
-#         # else:
-#         #     self.canvas.prompt()
-
-#     def on_mouse(self, button, pos, state=None):
-#         pass
-#         # if state == 'click' and button == 'left':
-#         #     # TODO: check 'click' mouse state instead
-#         #     x, y = pos
-#         #     x, y = self.canvas.pick(x, y)
-#         #     # print(x, y)
-#         #     i = math.floor(
-#         #         (x - self.sample / self.sample_rate) /
-#         #         (self.buffer_size / self.sample_rate) *
-#         #         self.buffer_size)
-#         #     j = math.floor(y)
-#         #     j = self.n_channels - 1 - j
-#         #     i = np.clip(i, 0, self.n_samples - 1)
-#         #     j = np.clip(j, 0, self.n_channels - 1)
-#         #     print(
-#         #         f"Picked {x}, {y} : {self.arr_buf[i, j]}")
-
-#     def on_prompt(self, t):
-#         pass
-#         # if not t:
-#         #     return
-#         # try:
-#         #     t = float(t)
-#         # except Exception:
-#         #     logger.error("Invalid time %s" % str(t))
-#         #     return
-#         # if t:
-#         #     self.goto(t)
-
-#     def show(self):
-#         run()
-
-
-# if __name__ == '__main__':
-#     n_channels = 385
-#     dtype = np.int16
-#     sample_rate = 30_000
-
-#     viewer = RawEphysViewer(n_channels, sample_rate, dtype)
-
-#     if 1:
-#         # Load from HTTP.
-#         viewer.load_session('d33baf74-263c-4b37-a0d0-b79dcb80a764')
-#         viewer.create()
-#         viewer.show()
-#     else:
-#         # Load from disk.
-#         path = Path(__file__).parent / "raw_ephys.bin"
-#         viewer.memmap_file(path)
-#         viewer.create()
-#         viewer.show()
