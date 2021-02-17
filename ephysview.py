@@ -108,12 +108,16 @@ class RasterView:
 
         pos = np.c_[spike_times, spike_depths, np.zeros(N)]
 
-        # Reindex the brain regions.
-        br = _index_of(brain_regions, np.unique(brain_regions))
-        spike_regions = br[spike_clusters]
-        assert spike_regions.shape == spike_times.shape
+        if 0:
+            # Reindex the brain regions.
+            br = _index_of(brain_regions, np.unique(brain_regions))
+            spike_regions = br[spike_clusters]
+            assert spike_regions.shape == spike_times.shape
+            sr = spike_regions.astype(np.float64)
+        else:
+            sr = spike_clusters.astype(np.float64)
 
-        color = colormap(spike_regions.astype(np.float64), cmap='glasbey', alpha=.5)
+        color = colormap(sr, cmap='glasbey', alpha=.5)
 
         self.v_point.data('pos', pos)
         self.v_point.data('color', color)
@@ -121,13 +125,30 @@ class RasterView:
 
 
 class RasterController:
+    _time_select_cb = None
+
     def __init__(self, model, view):
         self.m = model
         self.v = view
         self.canvas = view.canvas
 
+        # Callbacks
+        self.canvas = view.canvas
+        self.canvas.connect(self.on_mouse_click)
+
     def set_data(self):
         self.v.set_spikes(self.m.st, self.m.sc, self.m.sd, self.m.cr)
+
+    def on_mouse_click(self, x, y, button=None, modifiers=()):
+        p = self.canvas.panel_at(x, y)
+        if p != self.v.panel:
+            return
+        xd, yd = p.pick(x, y)
+        if self._time_select_cb is not None:
+            self._time_select_cb(xd)
+
+    def on_time_select(self, f):
+        self._time_select_cb = f
 
 
 
@@ -371,5 +392,10 @@ if __name__ == '__main__':
     v_raw = RawDataView(canvas, p1, m_raw.n_channels)
     c_raw = RawDataController(m_raw, v_raw)
     c_raw.set_range(0, .1)
+
+    # Link between the panels.
+    @c_raster.on_time_select
+    def on_time_select(t):
+        c_raw.go_to(t)
 
     run()
