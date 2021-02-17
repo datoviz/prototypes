@@ -14,7 +14,7 @@ from joblib import Memory
 import numpy as np
 from oneibl.one import ONE
 
-from datoviz import canvas, run
+from datoviz import canvas, run, colormap
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,17 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------------------------------------
 # Utils
 # -------------------------------------------------------------------------------------------------
+
+def _index_of(arr, lookup):
+    lookup = np.asarray(lookup, dtype=np.int32)
+    m = (lookup.max() if len(lookup) else 0) + 1
+    tmp = np.zeros(m + 1, dtype=np.int)
+    # Ensure that -1 values are kept.
+    tmp[-1] = -1
+    if len(lookup):
+        tmp[lookup] = np.arange(len(lookup))
+    return tmp[arr]
+
 
 def get_data_urls(eid, probe_idx=0):
     # Find URL to .cbin file
@@ -61,6 +72,62 @@ def _is_cached(f, args, kwargs):
     func_id, args_id = f._get_output_identifiers(*args, **kwargs)
     return (f._check_previous_func_code(stacklevel=4)
             and f.store_backend.contains_item([func_id, args_id]))
+
+
+@memory.cache
+def _load_spikes(probe_id):
+    dtypes = [
+        'spikes.times', 'spikes.amps', 'spikes.clusters', 'spikes.depths',
+        'clusters.brainLocationIds_ccf_2017']
+    dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id)
+    dsets_int = [[d for d in dsets if d['dataset_type'] in _][0] for _ in dtypes]
+    return [np.load(_) for _ in one.download_datasets(dsets_int)]
+
+
+
+# -------------------------------------------------------------------------------------------------
+# Raster viewer
+# -------------------------------------------------------------------------------------------------
+
+class RasterModel:
+    def __init__(self, probe_id):
+        self.st, self.sa, self.sc, self.sd, self.cr = _load_spikes(probe_id)
+        print(f"Loaded {len(self.st)} spikes")
+
+
+class RasterView:
+    def __init__(self, canvas, panel):
+        self.canvas = canvas
+        self.panel = panel
+        self.v_point = self.panel.visual('point')
+
+    def set_spikes(self, spike_times, spike_clusters, spike_depths, brain_regions):
+        N = len(spike_times)
+        assert spike_times.shape == spike_depths.shape == spike_clusters.shape
+        assert 100 < len(brain_regions) < 1000
+
+        pos = np.c_[spike_times, spike_depths, np.zeros(N)]
+
+        # Reindex the brain regions.
+        br = _index_of(brain_regions, np.unique(brain_regions))
+        spike_regions = br[spike_clusters]
+        assert spike_regions.shape == spike_times.shape
+
+        color = colormap(spike_regions.astype(np.float64), cmap='glasbey', alpha=.5)
+
+        self.v_point.data('pos', pos)
+        self.v_point.data('color', color)
+        self.v_point.data('ms', np.array([2.]))
+
+
+class RasterController:
+    def __init__(self, model, view):
+        self.m = model
+        self.v = view
+        self.canvas = view.canvas
+
+    def set_data(self):
+        self.v.set_spikes(self.m.st, self.m.sc, self.m.sd, self.m.cr)
 
 
 
@@ -281,16 +348,28 @@ class RawDataController:
 
 if __name__ == '__main__':
 
-    eid = 'd33baf74-263c-4b37-a0d0-b79dcb80a764'
+    insertions = one.alyx.rest('insertions', 'list', dataset_type='channels.mlapdv')
+    insertion_id = insertions[0]['id']
+    session_id = insertions[0]['session_info']['id']
 
-    m = RawDataModel(eid)
+    m_raster = RasterModel(insertion_id)
+    m_raw = RawDataModel(session_id)
 
     # Create the Visky view.
-    canvas = canvas(rows=1, cols=2)
-    p0 = canvas.panel(col=1, controller='axes', hide_grid=True)
+    canvas = canvas(width=1600, height=800, rows=1, cols=2, show_fps=True)
 
-    v = RawDataView(canvas, p0, m.n_channels)
-    c = RawDataController(m, v)
-    c.set_range(0, .1)
+    # Panels.
+    p0 = canvas.panel(col=0, controller='axes', hide_grid=False)
+    p1 = canvas.panel(col=1, controller='axes', hide_grid=True)
+
+    # Raster view.
+    v_raster = RasterView(canvas, p0)
+    c_raster = RasterController(m_raster, v_raster)
+    c_raster.set_data()
+
+    # Raw data view.
+    v_raw = RawDataView(canvas, p1, m_raw.n_channels)
+    c_raw = RawDataController(m_raw, v_raw)
+    c_raw.set_range(0, .1)
 
     run()
