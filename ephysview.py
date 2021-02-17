@@ -157,7 +157,7 @@ class RawDataView:
 
         # Create the Visky view.
         self.canvas = canvas()
-        self.panel = self.canvas.panel(controller='axes')
+        self.panel = self.canvas.panel(controller='axes', hide_grid=True)
 
         # Image cmap visual
         self.v_image = self.panel.visual('image_cmap')
@@ -204,7 +204,7 @@ class RawDataController:
 
         # GUI
         self.gui = self.canvas.gui("GUI")
-        self.gui.control('slider_float', 'time', vmin=0, vmax=self.m.duration)(self.on_slider)
+        self.gui.control('slider_float', 'time', vmin=0, vmax=self.m.duration, mode='async')(self.on_slider)
 
     def set_range(self, t0, t1):
         assert t0 < t1
