@@ -135,15 +135,15 @@ class RawDataModel:
 
 
 class RawDataView:
-    def __init__(self, n_channels):
+    def __init__(self, canvas, panel, n_channels):
+        self.canvas = canvas
+        self.panel = panel
+
         assert n_channels > 0
         self.n_channels = n_channels
 
+        # Place holder for the data.
         self.arr = np.zeros((30_000, self.n_channels), dtype=np.int16)
-
-        # Create the Visky view.
-        self.canvas = canvas()
-        self.panel = self.canvas.panel(controller='axes', hide_grid=True)
 
         # Image cmap visual
         self.v_image = self.panel.visual('image_cmap')
@@ -285,12 +285,11 @@ if __name__ == '__main__':
 
     m = RawDataModel(eid)
 
-    # arr = m.get_raw_data(0, .1)
-    # import matplotlib.pyplot as plt
-    # plt.imshow(arr)
-    # plt.show()
+    # Create the Visky view.
+    canvas = canvas(rows=1, cols=2)
+    p0 = canvas.panel(col=1, controller='axes', hide_grid=True)
 
-    v = RawDataView(m.n_channels)
+    v = RawDataView(canvas, p0, m.n_channels)
     c = RawDataController(m, v)
     c.set_range(0, .1)
 
