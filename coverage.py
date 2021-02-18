@@ -131,10 +131,10 @@ class AtlasController:
         self.m = model
 
         # Canvas.
-        self.canvas = canvas(rows=1, cols=2, show_fps=True, width=1600, height=600)
+        self.canvas = canvas(cols=2, show_fps=True, width=1600, height=700, clear_color='black')
 
         # Left panel.
-        self.p0 = self.canvas.panel(col=0, controller='panzoom', hide_grid=True)
+        self.p0 = self.canvas.panel(col=0, controller='axes', hide_grid=True)
         assert self.p0.col == 0
 
         # Left view.
@@ -142,7 +142,7 @@ class AtlasController:
         self.view0.set_data(self.m.atlas)
 
         # Right panel.
-        self.p1 = self.canvas.panel(col=1, controller='panzoom', hide_grid=True)
+        self.p1 = self.canvas.panel(col=1, controller='axes', hide_grid=True)
         assert self.p1.col == 1
 
         # Right view.
