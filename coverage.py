@@ -1,11 +1,30 @@
 import numpy as np
 
-from ibllib.atlas import AllenAtlas
-
 from datoviz import canvas, run, colormap
 
 
-def save_volume():
+def normalize_volume(v):
+    v = v.astype(np.float32)
+    v -= v.min()
+    v /= v.max()
+    assert np.all(0 <= v)
+    assert np.all(v <= 1)
+    return v
+
+
+def transpose_volume(v):
+    """Return the flattened buffer of a 3D array, using the strides corresponding to
+    Vulkan instead of NumPy"""
+    x, y, z = v.shape
+    its = np.dtype(v.dtype).itemsize
+    strides = (z * its, x * z * its, its)
+    out = as_strided(v, shape=v.shape, strides=strides).ravel()
+    assert out.flags['C_CONTIGUOUS']
+    out = out.reshape((y, x, z))
+    return out
+
+
+def save_coverage():
     from oneibl.one import ONE
     from ibllib.pipes.histology import coverage
 
@@ -25,49 +44,52 @@ def save_volume():
     np.save('coverage.npy', vol)
 
 
+def save_atlas():
+    from ibllib.atlas import AllenAtlas
+    ba = AllenAtlas()
+    vol = np.ascontiguousarray(ba.image)
+    np.save('atlas.npy', vol)
 
-vol = np.load('coverage.npy')
-vol = np.transpose(vol, (2, 1, 0))
-x, y, z = vol.shape
 
-ba = AllenAtlas()
-vola = np.ascontiguousarray(ba.image)
-vola = np.transpose(vola, (1, 2, 0))
-# assert vola.shape == vol.shape
+cov = np.ascontiguousarray(np.load('coverage.npy'))
+atlas = np.ascontiguousarray(np.load('atlas.npy'))
 
-c = canvas(show_fps=True)
-panel = c.panel(controller='panzoom', hide_grid=True)
-visual = panel.visual('volume_slice')
+cov = normalize_volume(cov)
+atlas = normalize_volume(atlas)
+
+assert cov.shape == atlas.shape
+x, y, z = cov.shape
+
+atlas += cov
+atlas = np.transpose(atlas, (1, 2, 0))
+
+
+c = canvas(rows=1, cols=2, show_fps=True, width=1600, height=600)
+
+p0 = c.panel(col=0, controller='panzoom', hide_grid=True)
+v0 = p0.visual('volume_slice')
 
 # Top left, top right, bottom right, bottom left
-visual.data('pos', np.array([0, y, 0]), idx=0)
-visual.data('pos', np.array([x, y, 0]), idx=1)
-visual.data('pos', np.array([x, 0, 0]), idx=2)
-visual.data('pos', np.array([0, 0, 0]), idx=3)
+v0.data('pos', np.array([0, y, 0]), idx=0)
+v0.data('pos', np.array([x, y, 0]), idx=1)
+v0.data('pos', np.array([x, 0, 0]), idx=2)
+v0.data('pos', np.array([0, 0, 0]), idx=3)
 
-visual.data('scale', np.array([150]))
+v0.volume(atlas)
 
 def update_tex_coords(w):
     # Top left, top right, bottom right, bottom left
-    visual.data('texcoords', np.array([0, 0, w]), idx=0)
-    visual.data('texcoords', np.array([0, 1, w]), idx=1)
-    visual.data('texcoords', np.array([1, 1, w]), idx=2)
-    visual.data('texcoords', np.array([1, 0, w]), idx=3)
-
-# visual.data('colormap', np.array([117]))
+    v0.data('texcoords', np.array([0, 0, w]), idx=0)
+    v0.data('texcoords', np.array([0, 1, w]), idx=1)
+    v0.data('texcoords', np.array([1, 1, w]), idx=2)
+    v0.data('texcoords', np.array([1, 0, w]), idx=3)
 
 update_tex_coords(.5)
 
-visual.volume(vola)
-
 gui = c.gui("GUI")
 
-# w = .5
 @gui.control('slider_float', 'z')
 def change_depth(w):
     update_tex_coords(w)
-    # global w
-    # if modifiers == ('control',):
-    #     w += .001 * dy
 
 run()
