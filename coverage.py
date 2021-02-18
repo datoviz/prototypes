@@ -135,10 +135,19 @@ class AtlasController:
 
         # Left panel.
         self.p0 = self.canvas.panel(col=0, controller='panzoom', hide_grid=True)
+        assert self.p0.col == 0
 
         # Left view.
         self.view0 = AtlasView(self.canvas, self.p0, self.m.shape, 0)
         self.view0.set_data(self.m.atlas)
+
+        # Right panel.
+        self.p1 = self.canvas.panel(col=1, controller='panzoom', hide_grid=True)
+        assert self.p1.col == 1
+
+        # Right view.
+        # self.view1 = AtlasView(self.canvas, self.p1, self.m.shape, 1)
+        # self.view1.set_data(self.m.atlas)
 
         # GUI
         self.gui = self.canvas.gui("GUI")
