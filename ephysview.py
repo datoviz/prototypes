@@ -282,7 +282,7 @@ class RawDataController:
         # GUI
         self.gui = self.canvas.gui("GUI")
         # self.gui.demo()
-        self.gui.control('input_float', 'time', step=1, step_fast=100, mode='async')(self.on_slider)
+        self.gui.control('input_float', 'time', step=.1, step_fast=1, mode='async')(self.on_slider)
 
     def set_range(self, t0, t1):
         if self._is_fetching:
