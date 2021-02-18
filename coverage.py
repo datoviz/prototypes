@@ -1,7 +1,19 @@
+"""
+Seeing coverage volume.
+"""
+
+# -------------------------------------------------------------------------------------------------
+# Imports
+# -------------------------------------------------------------------------------------------------
+
 import numpy as np
 
 from datoviz import canvas, run, colormap
 
+
+# -------------------------------------------------------------------------------------------------
+# Utils
+# -------------------------------------------------------------------------------------------------
 
 def normalize_volume(v):
     v = v.astype(np.float32)
@@ -51,45 +63,95 @@ def save_atlas():
     np.save('atlas.npy', vol)
 
 
-cov = np.ascontiguousarray(np.load('coverage.npy'))
-atlas = np.ascontiguousarray(np.load('atlas.npy'))
+# -------------------------------------------------------------------------------------------------
+# Atlas model
+# -------------------------------------------------------------------------------------------------
 
-cov = normalize_volume(cov)
-atlas = normalize_volume(atlas)
+class AtlasModel:
+    def __init__(self):
+        cov = np.ascontiguousarray(np.load('coverage.npy'))
+        atlas = np.ascontiguousarray(np.load('atlas.npy'))
 
-assert cov.shape == atlas.shape
-x, y, z = cov.shape
+        cov = normalize_volume(cov)
+        atlas = normalize_volume(atlas)
 
-atlas += cov
-atlas = np.transpose(atlas, (1, 2, 0))
+        assert cov.shape == atlas.shape
+        self.shape = cov.shape
+
+        atlas += cov
+        atlas = np.transpose(atlas, (1, 2, 0))
+
+        self.atlas = atlas
 
 
-c = canvas(rows=1, cols=2, show_fps=True, width=1600, height=600)
+# -------------------------------------------------------------------------------------------------
+# Atlas view
+# -------------------------------------------------------------------------------------------------
 
-p0 = c.panel(col=0, controller='panzoom', hide_grid=True)
-v0 = p0.visual('volume_slice')
+class AtlasView:
+    def __init__(self, canvas, panel, shape, axis):
+        self.canvas = canvas
+        self.panel = panel
+        self.axis = axis
 
-# Top left, top right, bottom right, bottom left
-v0.data('pos', np.array([0, y, 0]), idx=0)
-v0.data('pos', np.array([x, y, 0]), idx=1)
-v0.data('pos', np.array([x, 0, 0]), idx=2)
-v0.data('pos', np.array([0, 0, 0]), idx=3)
+        self.visual = panel.visual('volume_slice')
 
-v0.volume(atlas)
+        # Top left, top right, bottom right, bottom left
+        x, y, z = shape
+        self.visual.data('pos', np.array([0, y, 0]), idx=0)
+        self.visual.data('pos', np.array([x, y, 0]), idx=1)
+        self.visual.data('pos', np.array([x, 0, 0]), idx=2)
+        self.visual.data('pos', np.array([0, 0, 0]), idx=3)
 
-def update_tex_coords(w):
-    # Top left, top right, bottom right, bottom left
-    v0.data('texcoords', np.array([0, 0, w]), idx=0)
-    v0.data('texcoords', np.array([0, 1, w]), idx=1)
-    v0.data('texcoords', np.array([1, 1, w]), idx=2)
-    v0.data('texcoords', np.array([1, 0, w]), idx=3)
+        self.update_tex_coords(.5)
 
-update_tex_coords(.5)
+    def set_data(self, atlas):
+        self.visual.volume(atlas)
 
-gui = c.gui("GUI")
+    def update_tex_coords(self, w):
+        if self.axis == 0:
+            i = np.array([0, 1, 2])
+        elif self.axis == 1:
+            i = np.array([0, 2, 1])
 
-@gui.control('slider_float', 'z')
-def change_depth(w):
-    update_tex_coords(w)
+        # Top left, top right, bottom right, bottom left
+        self.visual.data('texcoords', np.array([0, 0, w])[i], idx=0)
+        self.visual.data('texcoords', np.array([0, 1, w])[i], idx=1)
+        self.visual.data('texcoords', np.array([1, 1, w])[i], idx=2)
+        self.visual.data('texcoords', np.array([1, 0, w])[i], idx=3)
 
-run()
+
+
+# -------------------------------------------------------------------------------------------------
+# Atlas controller
+# -------------------------------------------------------------------------------------------------
+
+class AtlasController:
+    def __init__(self, model):
+        self.m = model
+
+        # Canvas.
+        self.canvas = canvas(rows=1, cols=2, show_fps=True, width=1600, height=600)
+
+        # Left panel.
+        self.p0 = self.canvas.panel(col=0, controller='panzoom', hide_grid=True)
+
+        # Left view.
+        self.view0 = AtlasView(self.canvas, self.p0, self.m.shape, 0)
+        self.view0.set_data(self.m.atlas)
+
+        # GUI
+        self.gui = self.canvas.gui("GUI")
+        self.gui.control('slider_float', 'z')(self.view0.update_tex_coords)
+
+
+
+# -------------------------------------------------------------------------------------------------
+# Entry point
+# -------------------------------------------------------------------------------------------------
+
+if __name__ == '__main__':
+    model = AtlasModel()
+    c = AtlasController(model)
+
+    run()
