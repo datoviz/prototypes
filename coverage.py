@@ -79,6 +79,7 @@ class AtlasModel:
         self.shape = cov.shape
 
         atlas += cov
+        atlas = np.clip(atlas, 0, 1)
         atlas = np.ascontiguousarray(atlas)
         atlas = np.transpose(atlas, (1, 2, 0))
 
@@ -140,6 +141,7 @@ class AtlasController:
         # Shared 3D texture.
         self.tex = self.canvas.volume(self.m.atlas)
 
+
         # Left panel.
         self.p0 = self.canvas.panel(col=0, controller='axes', hide_grid=True)
         assert self.p0.col == 0
@@ -147,17 +149,19 @@ class AtlasController:
         # Left view.
         self.view0 = AtlasView(self.canvas, self.p0, self.tex, 0)
 
+
         # Right panel.
         self.p1 = self.canvas.panel(col=1, controller='axes', hide_grid=True)
         assert self.p1.col == 1
 
         # Right view.
-        # self.view1 = AtlasView(self.canvas, self.p1, self.m.shape, 1)
-        # self.view1.set_data(self.m.atlas)
+        self.view1 = AtlasView(self.canvas, self.p1, self.tex, 1)
+
 
         # GUI
         self.gui = self.canvas.gui("GUI")
         self.gui.control('slider_float', 'z')(self.view0.update_tex_coords)
+        self.gui.control('slider_float', 'y')(self.view1.update_tex_coords)
 
 
 
