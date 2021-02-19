@@ -8,6 +8,7 @@ Seeing coverage volume.
 
 import numpy as np
 
+from ibllib.atlas import AllenAtlas
 from datoviz import canvas, run, colormap
 
 
@@ -83,7 +84,13 @@ class AtlasModel:
         atlas = np.ascontiguousarray(atlas)
         atlas = np.transpose(atlas, (1, 2, 0))
 
-        self.atlas = atlas
+        self.vol = atlas
+
+        self.atlas = AllenAtlas(25)
+        self.xlim = self.atlas.bc.xlim
+        self.ylim = self.atlas.bc.ylim[::-1]
+        self.zlim = self.atlas.bc.zlim[::-1]
+
 
 
 # -------------------------------------------------------------------------------------------------
@@ -93,7 +100,7 @@ class AtlasModel:
 class AtlasView:
     tex = None
 
-    def __init__(self, canvas, panel, tex, axis):
+    def __init__(self, canvas, panel, tex, axis, xlim, ylim, zlim):
         self.canvas = canvas
         self.panel = panel
         self.axis = axis
@@ -102,14 +109,15 @@ class AtlasView:
         self.visual = panel.visual('volume_slice')
         self.visual.texture(self.tex)
 
-        # TODO: coordinates with brain atlas
-        x, y, z = 1, 1, 1
+        xmin, xmax = xlim
+        ymin, ymax = ylim
+        zmin, zmax = zlim
 
         # Top left, top right, bottom right, bottom left
-        self.visual.data('pos', np.array([0, y, 0]), idx=0)
-        self.visual.data('pos', np.array([x, y, 0]), idx=1)
-        self.visual.data('pos', np.array([x, 0, 0]), idx=2)
-        self.visual.data('pos', np.array([0, 0, 0]), idx=3)
+        self.visual.data('pos', np.array([xmin, zmax, 0]), idx=0)
+        self.visual.data('pos', np.array([xmax, zmax, 0]), idx=1)
+        self.visual.data('pos', np.array([xmax, zmin, 0]), idx=2)
+        self.visual.data('pos', np.array([xmin, zmin, 0]), idx=3)
 
         self.update_tex_coords(.5)
 
@@ -139,15 +147,17 @@ class AtlasController:
         self.canvas = canvas(cols=2, show_fps=True, width=1600, height=700, clear_color='black')
 
         # Shared 3D texture.
-        self.tex = self.canvas.volume(self.m.atlas)
+        self.tex = self.canvas.volume(self.m.vol)
 
 
         # Left panel.
         self.p0 = self.canvas.panel(col=0, controller='axes', hide_grid=True)
         assert self.p0.col == 0
 
+        vargs = (self.m.xlim, self.m.ylim, self.m.zlim)
+
         # Left view.
-        self.view0 = AtlasView(self.canvas, self.p0, self.tex, 0)
+        self.view0 = AtlasView(self.canvas, self.p0, self.tex, 0, *vargs)
 
 
         # Right panel.
@@ -155,14 +165,28 @@ class AtlasController:
         assert self.p1.col == 1
 
         # Right view.
-        self.view1 = AtlasView(self.canvas, self.p1, self.tex, 1)
+        self.view1 = AtlasView(self.canvas, self.p1, self.tex, 1, *vargs)
 
 
         # GUI
         self.gui = self.canvas.gui("GUI")
-        self.gui.control('slider_float', 'z')(self.view0.update_tex_coords)
-        self.gui.control('slider_float', 'y')(self.view1.update_tex_coords)
 
+        self.gui.control(
+            'slider_float', 'ap', vmin=self.m.zlim[0], vmax=self.m.zlim[1])(self.slice_z)
+
+        self.gui.control(
+            'slider_float', 'ml', vmin=self.m.ylim[0], vmax=self.m.ylim[1])(self.slice_y)
+
+    def _slice(self, axis, value):
+        lim = self.m.zlim if axis == 0 else self.m.ylim
+        v = self.view0 if axis == 0 else self.view1
+        v.update_tex_coords((value - lim[0]) / (lim[1] - lim[0]))
+
+    def slice_z(self, value):
+        return self._slice(0, value)
+
+    def slice_y(self, value):
+        return self._slice(1, value)
 
 
 # -------------------------------------------------------------------------------------------------
