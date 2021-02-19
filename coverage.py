@@ -69,8 +69,8 @@ def save_atlas():
 
 class AtlasModel:
     def __init__(self):
-        cov = np.ascontiguousarray(np.load('coverage.npy'))
-        atlas = np.ascontiguousarray(np.load('atlas.npy'))
+        cov = np.load('coverage.npy')
+        atlas = np.load('atlas.npy')
 
         cov = normalize_volume(cov)
         atlas = normalize_volume(atlas)
@@ -79,6 +79,7 @@ class AtlasModel:
         self.shape = cov.shape
 
         atlas += cov
+        atlas = np.ascontiguousarray(atlas)
         atlas = np.transpose(atlas, (1, 2, 0))
 
         self.atlas = atlas
@@ -89,24 +90,27 @@ class AtlasModel:
 # -------------------------------------------------------------------------------------------------
 
 class AtlasView:
-    def __init__(self, canvas, panel, shape, axis):
+    tex = None
+
+    def __init__(self, canvas, panel, tex, axis):
         self.canvas = canvas
         self.panel = panel
         self.axis = axis
+        self.tex = tex
 
         self.visual = panel.visual('volume_slice')
+        self.visual.texture(self.tex)
+
+        # TODO: coordinates with brain atlas
+        x, y, z = 1, 1, 1
 
         # Top left, top right, bottom right, bottom left
-        x, y, z = shape
         self.visual.data('pos', np.array([0, y, 0]), idx=0)
         self.visual.data('pos', np.array([x, y, 0]), idx=1)
         self.visual.data('pos', np.array([x, 0, 0]), idx=2)
         self.visual.data('pos', np.array([0, 0, 0]), idx=3)
 
         self.update_tex_coords(.5)
-
-    def set_data(self, atlas):
-        self.visual.volume(atlas)
 
     def update_tex_coords(self, w):
         if self.axis == 0:
@@ -133,13 +137,15 @@ class AtlasController:
         # Canvas.
         self.canvas = canvas(cols=2, show_fps=True, width=1600, height=700, clear_color='black')
 
+        # Shared 3D texture.
+        self.tex = self.canvas.volume(self.m.atlas)
+
         # Left panel.
         self.p0 = self.canvas.panel(col=0, controller='axes', hide_grid=True)
         assert self.p0.col == 0
 
         # Left view.
-        self.view0 = AtlasView(self.canvas, self.p0, self.m.shape, 0)
-        self.view0.set_data(self.m.atlas)
+        self.view0 = AtlasView(self.canvas, self.p0, self.tex, 0)
 
         # Right panel.
         self.p1 = self.canvas.panel(col=1, controller='axes', hide_grid=True)
