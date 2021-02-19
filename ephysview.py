@@ -231,20 +231,25 @@ class RawDataView:
         self.n_channels = n_channels
 
         # Place holder for the data.
-        self.arr = np.zeros((30_000, self.n_channels), dtype=np.int16)
+        self.arr = np.zeros((3_000, self.n_channels), dtype=np.int16)
+        self.tex = self.canvas.image(self.arr)
 
         # Image cmap visual
         self.v_image = self.panel.visual('image_cmap')
+        self.v_image.texture(self.tex)
 
         # Initialize the POS prop.
         self.set_xrange(0, 1)
         self.set_vrange(0, 300)
 
+        self._set_tex_coords(1)
+
+    def _set_tex_coords(self, x=1):
         # Top left, top right, bottom right, bottom left
         self.v_image.data('texcoords', np.atleast_2d([0, 0]), idx=0)
         self.v_image.data('texcoords', np.atleast_2d([0, 1]), idx=1)
-        self.v_image.data('texcoords', np.atleast_2d([1, 1]), idx=2)
-        self.v_image.data('texcoords', np.atleast_2d([1, 0]), idx=3)
+        self.v_image.data('texcoords', np.atleast_2d([x, 1]), idx=2)
+        self.v_image.data('texcoords', np.atleast_2d([x, 0]), idx=3)
 
     def set_xrange(self, t0, t1):
         # Top left, top right, bottom right, bottom left
@@ -262,12 +267,13 @@ class RawDataView:
         assert img.shape[1] == self.n_channels
         n = min(img.shape[0], self.arr.shape[0])
         self.arr[:n, :] = img[:n, :]
-        self.v_image.image(self.arr[:n, :])
-
+        self.tex.set_data(self.arr[:n, :])
+        # self._set_tex_coords(n / float(self.arr.shape[0]))
 
 
 class RawDataController:
     _is_fetching = False
+    _do_update_control = True
 
     def __init__(self, model, view):
         self.m = model
@@ -300,6 +306,10 @@ class RawDataController:
         assert t0 < t1
         self.t0, self.t1 = t0, t1
         print("Set range %.3f %.3f" % (t0, t1))
+
+        # Update slider only when changing the time by using another method than the slider.
+        if self._do_update_control:
+            self._update_control()
 
         # Update the positions.
         self.v.set_xrange(t0, t1)
@@ -355,14 +365,16 @@ class RawDataController:
             self.set_range(0, self.t1 - self.t0)
         if key == 'end':
             self.set_range(self.m.duration - (self.t1 - self.t0), self.m.duration)
-        self._update_control()
 
-    def _update_control(self):
+    def _update_control(self,):
         # Update the input float value.
         self.gui.set_value('time', float((self.t0 + self.t1) / 2))
 
     def on_slider(self, value):
+        # HACK: do not update the control programmatically when it's being used with the slider.
+        self._do_update_control = False
         self.go_to(value)
+        self._do_update_control = True
 
 
 
@@ -399,7 +411,7 @@ if __name__ == '__main__':
     # Link between the panels.
     @c_raster.on_time_select
     def on_time_select(t):
-        c_raw.go_to(t)
         c_raw._update_control()
+        c_raw.go_to(t)
 
     run()
