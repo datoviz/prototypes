@@ -18,6 +18,17 @@ from datoviz import canvas, run, colormap
 # Utils
 # -------------------------------------------------------------------------------------------------
 
+def _index_of(arr, lookup):
+    lookup = np.asarray(lookup, dtype=np.int32)
+    m = (lookup.max() if len(lookup) else 0) + 1
+    tmp = np.zeros(m + 1, dtype=np.int)
+    # Ensure that -1 values are kept.
+    tmp[-1] = -1
+    if len(lookup):
+        tmp[lookup] = np.arange(len(lookup))
+    return tmp[arr]
+
+
 def normalize_volume(v):
     v = v.astype(np.float32)
     v -= v.min()
@@ -81,19 +92,38 @@ def save_labels():
 
 class AtlasModel:
     def __init__(self):
+
+        self.atlas = AllenAtlas(25)
+        self.xlim = self.atlas.bc.xlim
+        self.ylim = self.atlas.bc.ylim[::-1]
+        self.zlim = self.atlas.bc.zlim[::-1]
+
+        # Coverage
         if not Path('coverage.npy').exists():
             save_coverage()
         cov = np.load('coverage.npy')
+        self.shape = cov.shape
 
+        # Atlas
         if not Path('label.npy').exists():
             save_labels()
         atlas = np.load('label.npy')
 
+        # Brain region colors
+        atlas_idx = _index_of(atlas.ravel(), self.atlas.regions.id).reshape(atlas.shape)
+        atlas = self.atlas.regions.rgb[atlas_idx]
+        atlas = np.concatenate((atlas, 255 * np.ones((atlas.shape[:3] + (1,)), dtype=atlas.dtype)), axis=3)
+
+        atlas = np.ascontiguousarray(atlas)
+        atlas = np.transpose(atlas, (1, 2, 0, 3))
+        self.vol = atlas
+        # TODO
+        return
+
+        # Merge coverage and atlas
+        assert cov.shape == atlas.shape
         cov = normalize_volume(cov)
         atlas = normalize_volume(atlas)
-
-        assert cov.shape == atlas.shape
-        self.shape = cov.shape
 
         atlas += cov
         atlas = np.clip(atlas, 0, 1)
@@ -101,11 +131,6 @@ class AtlasModel:
         atlas = np.transpose(atlas, (1, 2, 0))
 
         self.vol = atlas
-
-        self.atlas = AllenAtlas(25)
-        self.xlim = self.atlas.bc.xlim
-        self.ylim = self.atlas.bc.ylim[::-1]
-        self.zlim = self.atlas.bc.zlim[::-1]
 
 
 
@@ -128,6 +153,9 @@ class AtlasView:
         xmin, xmax = xlim
         ymin, ymax = ylim
         zmin, zmax = zlim
+
+        # Do not use colormap, sample RGBA texture directly from 3D volume.
+        self.visual.data('colormap', np.array([-1]))
 
         # Top left, top right, bottom right, bottom left
         self.visual.data('pos', np.array([xmin, zmax, 0]), idx=0)
