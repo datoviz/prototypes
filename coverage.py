@@ -6,6 +6,8 @@ Seeing coverage volume.
 # Imports
 # -------------------------------------------------------------------------------------------------
 
+from pathlib import Path
+
 import numpy as np
 
 from ibllib.atlas import AllenAtlas
@@ -40,6 +42,8 @@ def transpose_volume(v):
 def save_coverage():
     from oneibl.one import ONE
     from ibllib.pipes.histology import coverage
+    from ibllib.atlas import AllenAtlas
+    ba = AllenAtlas()
 
     one = ONE()
     trajs = one.alyx.rest(
@@ -64,14 +68,26 @@ def save_atlas():
     np.save('atlas.npy', vol)
 
 
+def save_labels():
+    from ibllib.atlas import AllenAtlas
+    ba = AllenAtlas()
+    vol = np.ascontiguousarray(ba.label)
+    np.save('label.npy', vol)
+
+
 # -------------------------------------------------------------------------------------------------
 # Atlas model
 # -------------------------------------------------------------------------------------------------
 
 class AtlasModel:
     def __init__(self):
+        if not Path('coverage.npy').exists():
+            save_coverage()
         cov = np.load('coverage.npy')
-        atlas = np.load('atlas.npy')
+
+        if not Path('label.npy').exists():
+            save_labels()
+        atlas = np.load('label.npy')
 
         cov = normalize_volume(cov)
         atlas = normalize_volume(atlas)
