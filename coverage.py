@@ -102,6 +102,9 @@ class AtlasModel:
         if not Path('coverage.npy').exists():
             save_coverage()
         cov = np.load('coverage.npy')
+        cov = normalize_volume(cov)
+        cov *= 255
+        cov = cov.astype(np.uint8)
         self.shape = cov.shape
 
         # Atlas
@@ -113,24 +116,25 @@ class AtlasModel:
         atlas_idx = _index_of(atlas.ravel(), self.atlas.regions.id).reshape(atlas.shape)
         atlas = self.atlas.regions.rgb[atlas_idx]
         atlas = np.concatenate((atlas, 255 * np.ones((atlas.shape[:3] + (1,)), dtype=atlas.dtype)), axis=3)
-
         atlas = np.ascontiguousarray(atlas)
-        atlas = np.transpose(atlas, (1, 2, 0, 3))
-        self.vol = atlas
-        # TODO
-        return
 
         # Merge coverage and atlas
-        assert cov.shape == atlas.shape
-        cov = normalize_volume(cov)
-        atlas = normalize_volume(atlas)
+        assert cov.shape == atlas.shape[:3]
+        _idx = cov != 0
+        atlas[_idx, :] = cov[_idx][:, np.newaxis]
 
-        atlas += cov
-        atlas = np.clip(atlas, 0, 1)
-        atlas = np.ascontiguousarray(atlas)
-        atlas = np.transpose(atlas, (1, 2, 0))
-
+        atlas = np.transpose(atlas, (1, 2, 0, 3))
         self.vol = atlas
+
+        # cov = normalize_volume(cov)
+        # atlas = normalize_volume(atlas)
+
+        # atlas += cov
+        # atlas = np.clip(atlas, 0, 1)
+        # atlas = np.ascontiguousarray(atlas)
+        # atlas = np.transpose(atlas, (1, 2, 0))
+
+        # self.vol = atlas
 
 
 
