@@ -190,6 +190,9 @@ class AtlasView:
 # -------------------------------------------------------------------------------------------------
 
 class AtlasController:
+    wz = 0
+    wy = 0
+
     def __init__(self, model):
         self.m = model
 
@@ -199,33 +202,28 @@ class AtlasController:
         # Shared 3D texture.
         self.tex = self.canvas.volume(self.m.vol)
 
-
         # Left panel.
         self.p0 = self.canvas.panel(col=0, controller='axes', hide_grid=True)
         assert self.p0.col == 0
-
         vargs = (self.m.xlim, self.m.ylim, self.m.zlim)
-
-        # Left view.
         self.view0 = AtlasView(self.canvas, self.p0, self.tex, 0, *vargs)
-
 
         # Right panel.
         self.p1 = self.canvas.panel(col=1, controller='axes', hide_grid=True)
         assert self.p1.col == 1
-
-        # Right view.
         self.view1 = AtlasView(self.canvas, self.p1, self.tex, 1, *vargs)
 
+        self.canvas.connect(self.on_mouse_wheel)
 
         # GUI
         self.gui = self.canvas.gui("GUI")
-
         self.gui.control(
             'slider_float', 'ap', vmin=self.m.zlim[0], vmax=self.m.zlim[1])(self.slice_z)
-
         self.gui.control(
             'slider_float', 'ml', vmin=self.m.ylim[0], vmax=self.m.ylim[1])(self.slice_y)
+
+        self.wz = self.gui.get_value('ap')
+        self.wy = self.gui.get_value('ml')
 
     def _slice(self, axis, value):
         lim = self.m.zlim if axis == 0 else self.m.ylim
@@ -237,6 +235,22 @@ class AtlasController:
 
     def slice_y(self, value):
         return self._slice(1, value)
+
+    def on_mouse_wheel(self, x, y, dx, dy, modifiers=()):
+        if not modifiers:
+            return
+        p = self.canvas.panel_at(x, y)
+        if not p:
+            return
+        x, y = p.pick(x, y)
+        if p == self.p0:
+            self.wz += .0001 * dy
+            self.gui.set_value('ap', self.wz)
+            self.slice_z(self.wz)
+        elif p == self.p1:
+            self.wy += .0001 * dy
+            self.gui.set_value('ml', self.wy)
+            self.slice_y(self.wy)
 
 
 # -------------------------------------------------------------------------------------------------
