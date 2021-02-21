@@ -114,9 +114,11 @@ class AtlasModel:
 
         # Brain region colors
         atlas_idx = _index_of(atlas.ravel(), self.atlas.regions.id).reshape(atlas.shape)
+        empty = atlas_idx == 0
         atlas = self.atlas.regions.rgb[atlas_idx]
         atlas = np.concatenate((atlas, 255 * np.ones((atlas.shape[:3] + (1,)), dtype=atlas.dtype)), axis=3)
         atlas = np.ascontiguousarray(atlas)
+        atlas[empty, -1] = 0
 
         # Merge coverage and atlas
         assert cov.shape == atlas.shape[:3]
