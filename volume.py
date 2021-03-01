@@ -19,8 +19,10 @@ visual.data('pos', np.atleast_2d(+shape / 2), idx=1)
 
 visual.data('length', np.atleast_2d(shape))
 
-# HACK
-# visual.data('colormap', 5 * np.ones(1))
+# Transfer function.
+fun = np.linspace(0, 1, 256).astype(np.float32)
+transfer = c.transfer(fun)
+visual.texture(transfer)
 
 # 3D texture with the volume
 ROOT = Path(__file__).resolve().parent.parent / 'datoviz'
