@@ -6,7 +6,7 @@ import numpy.random as nr
 from datoviz import canvas, run, colormap
 
 
-c = canvas(show_fps=True)
+c = canvas(show_fps=True, pick=True)
 panel = c.panel(controller='arcball')
 visual = panel.visual('volume')
 
@@ -34,6 +34,14 @@ vol = np.fromfile(ROOT / "data/volume/atlas_25.img", dtype=np.uint16)
 vol = vol.reshape(texshape)
 vol *= 100
 V = c.volume(vol)
+
+@c.connect
+def on_mouse_click(x, y, button, modifiers=()):
+    u, v, w, _ = c.pick(x, y)
+    u /= 255.0
+    v /= 255.0
+    w /= 255.0
+    print(f"Texture coordinates are {u=:.4f}, {v=:.4f}, {w=:.4f}")
 
 # GUI
 gui = c.gui("GUI")
