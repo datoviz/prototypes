@@ -3,6 +3,9 @@ from pathlib import Path
 import numpy as np
 import numpy.random as nr
 
+from ibllib.atlas import AllenAtlas
+ba = AllenAtlas()
+
 from datoviz import canvas, run, colormap
 
 
@@ -41,13 +44,29 @@ volume_label = volume_label.reshape(tuple(texshape) + (4,))
 V_label = c.volume(volume_label)
 visual.texture(V_label, idx=1)
 
+
 @c.connect
 def on_mouse_click(x, y, button, modifiers=()):
-    u, v, w, _ = c.pick(x, y)
-    u /= 255.0
-    v /= 255.0
-    w /= 255.0
-    print(f"Texture coordinates are {u=:.4f}, {v=:.4f}, {w=:.4f}")
+    # ml: right positive, 0-255
+    # dv: dorsal positive
+    # ap: anterior negative
+    ml, dv, ap, _ = c.pick(x, y)
+    ml = (ml + .5) / 256.0
+    dv = (dv + .5) / 256.0
+    ap = (ap + .5) / 256.0
+    ap = 1 - ap  # anterior positive
+
+    nml = texshape[0]
+    nap = texshape[2]
+    ndv = texshape[1]
+
+    iml = int(round(ml * nml))
+    iap = int(round(ap * nap))
+    idv = int(round(dv * ndv))
+
+    # ba.label.shape = (nap, nml, ndv)
+    l = ba.label[iap, iml, idv]
+    print(ba.regions.name[l])
 
 # GUI
 gui = c.gui("GUI")
