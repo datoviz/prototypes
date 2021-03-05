@@ -29,11 +29,17 @@ visual.texture(transfer)
 visual.data('transferx', np.array([0, .5]))
 
 # 3D texture with the volume
-ROOT = Path(__file__).resolve().parent.parent / 'datoviz'
-vol = np.fromfile(ROOT / "data/volume/atlas_25.img", dtype=np.uint16)
+vol = np.load("atlas.npy")
 vol = vol.reshape(texshape)
 vol *= 100
 V = c.volume(vol)
+visual.texture(V)
+
+# 3D texture with the labels
+volume_label = np.load("volume_label.npy")
+volume_label = volume_label.reshape(tuple(texshape) + (4,))
+V_label = c.volume(volume_label)
+visual.texture(V_label, idx=1)
 
 @c.connect
 def on_mouse_click(x, y, button, modifiers=()):
@@ -59,8 +65,5 @@ clip[2] = +1
 def on_change(x):
     clip[3] = -x
     visual.data('clip', clip)
-
-# Set the texture to the visual.
-visual.texture(V)
 
 run()

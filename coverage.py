@@ -113,9 +113,14 @@ class AtlasModel:
         atlas = np.load('label.npy')
 
         # Brain region colors
-        atlas = self.atlas.regions.rgb[atlas]
-        atlas = np.concatenate((atlas, 255 * np.ones((atlas.shape[:3] + (1,)), dtype=atlas.dtype)), axis=3)
+        n = len(self.atlas.regions.rgb)
+        alpha = 255 * np.ones((n, 1))
+        alpha[0] = 0  # put empty region transparent?
+        rgb = np.hstack((self.atlas.regions.rgb, alpha)).astype(np.uint8)
+        atlas = rgb[atlas]
         atlas = np.ascontiguousarray(atlas)
+        np.save('volume_label.npy', atlas)
+        # atlas.astype(np.uint8).tofile('../datoviz/data/volume/atlas_25_label.img')
 
         # Merge coverage and atlas
         assert cov.shape == atlas.shape[:3]
