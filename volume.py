@@ -49,27 +49,36 @@ visual.texture(V_label, idx=1)
 def on_mouse_click(x, y, button, modifiers=()):
     # ml: right positive, 0-255
     # dv: dorsal positive
-    # ap: anterior negative
-    ml, dv, ap, _ = c.pick(x, y)
-    ml = (ml + .5) / 256.0
-    dv = (dv + .5) / 256.0
-    ap = (ap + .5) / 256.0
-    ap = 1 - ap  # anterior positive
+    # ap: anterior positive
+    x, y, z, _ = c.pick(x, y)
+    ml = (y + .5) / 256.0
+    dv = (x + .5) / 256.0
+    ap = (z + .5) / 256.0
+    print(f"Picked {ml=:.4f}, {dv=:.4f}, {ap=:.4f}")
 
     nml = texshape[0]
     nap = texshape[2]
     ndv = texshape[1]
 
     iml = int(round(ml * nml))
+    assert 0 <= iml < nml
     iap = int(round(ap * nap))
+    assert 0 <= iap < nap
     idv = int(round(dv * ndv))
+    assert 0 <= idv < ndv
 
     # ba.label.shape = (nap, nml, ndv)
     l = ba.label[iap, iml, idv]
-    print(ba.regions.name[l])
+    if l >= len(ba.regions.name):
+        s = f"Error with label index {l} >= {len(ba.regions.name)}"
+    else:
+        s = f"{ba.regions.name[l]}"
+    gui.set_value("Brain region", s)
+
 
 # GUI
 gui = c.gui("GUI")
+gui.control("label", "Brain region", value="void")
 
 # Transfer function slider
 @gui.control("slider_float2", "transferx", vmin=0, vmax=1, force_increasing=True)
