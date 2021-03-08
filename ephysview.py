@@ -277,6 +277,8 @@ class RawDataView:
 class RawDataController:
     _is_fetching = False
     _do_update_control = True
+    filters = (None, 'filter_1', 'filter_2')
+    _cur_filter_idx = 0
 
     def __init__(self, model, view):
         self.m = model
@@ -334,10 +336,31 @@ class RawDataController:
         self._is_fetching = False
 
         # CAR
+        # TODO: as an independent filter?
         arr -= arr.mean(axis=0).astype(arr.dtype)
+
+        # Filter.
+        arr = self.filter(arr)
 
         # Update the image.
         self.v.set_image(arr)
+
+    def filter_1(self, arr):
+        return arr * 2
+
+    def filter_2(self, arr):
+        return arr * .5
+
+    def filter(self, arr):
+        f = self.filters[self._cur_filter_idx]
+        if not f:
+            return arr
+        print(f"Apply filter {f}")
+        return getattr(self, f)(arr)
+
+    def next_filter(self):
+        self._cur_filter_idx = (self._cur_filter_idx + 1) % len(self.filters)
+        self.set_range(self.t0, self.t1)
 
     def go_left(self, shift):
         d = self.t1 - self.t0
@@ -373,6 +396,8 @@ class RawDataController:
             self.set_range(0, self.t1 - self.t0)
         if key == 'end':
             self.set_range(self.m.duration - (self.t1 - self.t0), self.m.duration)
+        if key == 'f':
+            self.next_filter()
 
     def _update_control(self,):
         # Update the input float value.
