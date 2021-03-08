@@ -221,9 +221,8 @@ class RawDataModel:
         return out
 
 
-
 class RawDataView:
-    def __init__(self, canvas, panel, n_channels):
+    def __init__(self, canvas, panel, n_channels, vrange=()):
         self.canvas = canvas
         self.panel = panel
 
@@ -238,9 +237,13 @@ class RawDataView:
         self.v_image = self.panel.visual('image_cmap')
         self.v_image.texture(self.tex)
 
+        self.v_image.data('colormap', np.array([26]))
+
         # Initialize the POS prop.
         self.set_xrange(0, 1)
-        self.set_vrange(0, 300)
+        if vrange:
+            self.set_vrange(*vrange)
+        self._init_vrange = vrange
 
         self._set_tex_coords(1)
 
@@ -290,6 +293,11 @@ class RawDataController:
         # self.gui.demo()
         self.gui.control('input_float', 'time', step=.1, step_fast=1, mode='async')(self.on_slider)
 
+        @self.gui.control('slider_float2', 'vrange', vmin=-.01, vmax=+.01, value=self.v._init_vrange)
+        def on_vrange(i, j):
+            self.v.set_vrange(i, j)
+            # print(i, j)
+
     def set_range(self, t0, t1):
         if self._is_fetching:
             return
@@ -305,7 +313,7 @@ class RawDataController:
         assert abs(t1 - t0 - d) < 1e-6
         assert t0 < t1
         self.t0, self.t1 = t0, t1
-        print("Set range %.3f %.3f" % (t0, t1))
+        print("Set time range %.3f %.3f" % (t0, t1))
 
         # Update slider only when changing the time by using another method than the slider.
         if self._do_update_control:
@@ -404,7 +412,7 @@ if __name__ == '__main__':
     c_raster.set_data()
 
     # Raw data view.
-    v_raw = RawDataView(canvas, p1, m_raw.n_channels)
+    v_raw = RawDataView(canvas, p1, m_raw.n_channels, vrange=(+.00231, -.00169))
     c_raw = RawDataController(m_raw, v_raw)
     c_raw.set_range(0, .1)
 
