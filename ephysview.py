@@ -12,6 +12,7 @@ from pathlib import Path
 
 from joblib import Memory
 import numpy as np
+from ibllib.atlas import AllenAtlas
 from oneibl.one import ONE
 
 from datoviz import canvas, run, colormap
@@ -101,6 +102,8 @@ class RasterView:
         self.panel = panel
         self.v_point = self.panel.visual('point')
 
+        self.atlas = AllenAtlas(25)
+
     def set_spikes(self, spike_times, spike_clusters, spike_depths, brain_regions):
         N = len(spike_times)
         assert spike_times.shape == spike_depths.shape == spike_clusters.shape
@@ -108,16 +111,14 @@ class RasterView:
 
         pos = np.c_[spike_times, spike_depths, np.zeros(N)]
 
-        if 0:
-            # Reindex the brain regions.
-            br = _index_of(brain_regions, np.unique(brain_regions))
-            spike_regions = br[spike_clusters]
-            assert spike_regions.shape == spike_times.shape
-            sr = spike_regions.astype(np.float64)
-        else:
-            sr = spike_clusters.astype(np.float64)
-
-        color = colormap(sr, cmap='glasbey', alpha=.5)
+        # Brain region colors
+        n = len(self.atlas.regions.rgb)
+        alpha = 255 * np.ones((n, 1))
+        rgb = np.hstack((self.atlas.regions.rgb, alpha)).astype(np.uint8)
+        spike_regions = brain_regions[spike_clusters]
+        # HACK: spurious values
+        spike_regions[spike_regions > 2000] = 0
+        color = rgb[spike_regions]
 
         self.v_point.data('pos', pos)
         self.v_point.data('color', color)
@@ -140,6 +141,8 @@ class RasterController:
         self.v.set_spikes(self.m.st, self.m.sc, self.m.sd, self.m.cr)
 
     def on_mouse_click(self, x, y, button=None, modifiers=()):
+        if not modifiers:
+            return
         p = self.canvas.panel_at(x, y)
         if p != self.v.panel:
             return
