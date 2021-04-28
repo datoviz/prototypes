@@ -15,7 +15,7 @@ import numpy as np
 from ibllib.atlas import AllenAtlas
 from oneibl.one import ONE
 
-from datoviz import canvas, run, colormap
+from datoviz import canvas, context, run, colormap
 
 
 logger = logging.getLogger(__name__)
@@ -234,7 +234,7 @@ class RawDataView:
 
         # Place holder for the data.
         self.arr = np.zeros((3_000, self.n_channels), dtype=np.int16)
-        self.tex = self.canvas.image(self.arr)
+        self.tex = context().image(self.arr)
 
         # Image cmap visual
         self.v_image = self.panel.visual('image_cmap')

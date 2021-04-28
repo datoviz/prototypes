@@ -9,7 +9,7 @@ ba = AllenAtlas()
 from datoviz import canvas, run, colormap
 
 
-c = canvas(show_fps=True, pick=True)
+c = canvas(show_fps=True, pick=True, high_dpi=True)
 panel = c.panel(controller='arcball')
 visual = panel.visual('volume')
 

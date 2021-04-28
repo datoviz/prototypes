@@ -39,7 +39,7 @@ def region_color(name):
 # -------------------------------------------------------------------------------------------------
 
 RESOLUTION = 25
-cachedir = Path(__file__).parent / '.joblib'
+cachedir = Path(__file__).resolve().parent / '.joblib'
 MEM = Memory(cachedir)
 
 
@@ -113,7 +113,7 @@ mesh.data('index', indices)
 
 
 # Load the neural activity data.
-root = Path(__file__).parent / '../../../data/yanliang/'
+root = (Path(__file__).resolve().parent / '../datoviz/data/yanliang/').resolve()
 pos, color, fr = load_yanliang(root)
 pos_ccf = atlas.xyz2ccf(pos, ccf_order='apdvml')[:, [2, 0, 1]]
 ms = fr[:, 0, 0]

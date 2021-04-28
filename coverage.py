@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from ibllib.atlas import AllenAtlas
-from datoviz import canvas, run, colormap
+from datoviz import canvas, run, colormap, context
 
 
 # -------------------------------------------------------------------------------------------------
@@ -202,7 +202,7 @@ class AtlasController:
         self.canvas = canvas(cols=2, show_fps=True, width=1600, height=700, clear_color='black')
 
         # Shared 3D texture.
-        self.tex = self.canvas.volume(self.m.vol)
+        self.tex = context().volume(self.m.vol)
 
         # Left panel.
         self.p0 = self.canvas.panel(col=0, controller='axes', hide_grid=True)
