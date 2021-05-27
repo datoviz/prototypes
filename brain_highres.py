@@ -44,7 +44,9 @@ visual.data('index', faces.ravel())
 visual.data('clip', np.array([0, 0, 1, 1]))
 
 gui = c.gui("GUI")
-@gui.control("slider_float", "clip", vmin=-1, vmax=+1, value=+1)
+slider = gui.control("slider_float", "clip", vmin=-1, vmax=+1, value=+1)
+
+@slider.connect
 def on_change(value):
     visual.data('clip', np.array([0, 0, 1, value]))
 

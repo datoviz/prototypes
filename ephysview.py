@@ -15,7 +15,7 @@ import numpy as np
 from ibllib.atlas import AllenAtlas
 from oneibl.one import ONE
 
-from datoviz import canvas, context, run, colormap
+from datoviz import canvas, run, colormap
 
 
 logger = logging.getLogger(__name__)
@@ -93,6 +93,12 @@ def _load_spikes(probe_id):
 class RasterModel:
     def __init__(self, probe_id):
         self.st, self.sa, self.sc, self.sd, self.cr = _load_spikes(probe_id)
+        n = 10000
+        self.st = self.st[:n]
+        self.sa = self.sa[:n]
+        self.sc = self.sc[:n]
+        self.sd = self.sd[:n]
+        self.cr = self.cr[:n]
         print(f"Loaded {len(self.st)} spikes")
 
 
@@ -135,6 +141,7 @@ class RasterController:
 
         # Callbacks
         self.canvas = view.canvas
+        self.scene = self.canvas.scene()
         self.canvas.connect(self.on_mouse_click)
 
     def set_data(self):
@@ -143,7 +150,8 @@ class RasterController:
     def on_mouse_click(self, x, y, button=None, modifiers=()):
         if not modifiers:
             return
-        p = self.canvas.panel_at(x, y)
+        p = self.scene.panel_at(x, y)
+        print(p, self.v.panel)
         if p != self.v.panel:
             return
         xd, yd = p.pick(x, y)
@@ -234,7 +242,9 @@ class RawDataView:
 
         # Place holder for the data.
         self.arr = np.zeros((3_000, self.n_channels), dtype=np.int16)
-        self.tex = context().image(self.arr)
+        self.tex = canvas.gpu().context().texture(
+            *self.arr.shape, dtype=self.arr.dtype, ndim=2, ncomp=1)
+        self.tex.upload(self.arr)
 
         # Image cmap visual
         self.v_image = self.panel.visual('image_cmap')
@@ -273,7 +283,7 @@ class RawDataView:
         assert img.shape[1] == self.n_channels
         n = min(img.shape[0], self.arr.shape[0])
         self.arr[:n, :] = img[:n, :]
-        self.tex.set_data(self.arr[:n, :])
+        self.tex.upload(self.arr[:n, :])
         # self._set_tex_coords(n / float(self.arr.shape[0]))
 
 
@@ -296,9 +306,13 @@ class RawDataController:
         # GUI
         self.gui = self.canvas.gui("GUI")
         # self.gui.demo()
-        self.gui.control('input_float', 'time', step=.1, step_fast=1, mode='async')(self.on_slider)
+        self.input = self.gui.control('input_float', 'time', step=.1, step_fast=1, mode='async')
+        self.input.connect(self.on_slider)
 
-        @self.gui.control('slider_float2', 'vrange', vmin=-.01, vmax=+.01, value=self.v._init_vrange)
+        self.slider = self.gui.control(
+            'slider_float2', 'vrange', vmin=-.01, vmax=+.01, value=self.v._init_vrange)
+
+        @self.slider.connect
         def on_vrange(i, j):
             self.v.set_vrange(i, j)
             # print(i, j)
@@ -404,7 +418,7 @@ class RawDataController:
 
     def _update_control(self,):
         # Update the input float value.
-        self.gui.set_value('time', float((self.t0 + self.t1) / 2))
+        self.input.set(float((self.t0 + self.t1) / 2))
 
     def on_slider(self, value):
         # HACK: do not update the control programmatically when it's being used with the slider.
@@ -428,19 +442,20 @@ if __name__ == '__main__':
     m_raw = RawDataModel(session_id)
 
     # Create the Visky view.
-    canvas = canvas(width=1600, height=800, rows=1, cols=2, show_fps=True)
+    c = canvas(width=1600, height=800, show_fps=True)
+    scene = c.scene(rows=1, cols=2)
 
     # Panels.
-    p0 = canvas.panel(col=0, controller='axes', hide_grid=False)
-    p1 = canvas.panel(col=1, controller='axes', hide_grid=True)
+    p0 = scene.panel(col=0, controller='axes', hide_grid=False)
+    p1 = scene.panel(col=1, controller='axes', hide_grid=True)
 
     # Raster view.
-    v_raster = RasterView(canvas, p0)
+    v_raster = RasterView(c, p0)
     c_raster = RasterController(m_raster, v_raster)
     c_raster.set_data()
 
     # Raw data view.
-    v_raw = RawDataView(canvas, p1, m_raw.n_channels, vrange=(+.00231, -.00169))
+    v_raw = RawDataView(c, p1, m_raw.n_channels, vrange=(+.00231, -.00169))
     c_raw = RawDataController(m_raw, v_raw)
     c_raw.set_range(0, .1)
 

@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from ibllib.atlas import AllenAtlas
-from datoviz import canvas, run, colormap, context
+from datoviz import canvas, run, colormap
 
 
 # -------------------------------------------------------------------------------------------------
@@ -199,19 +199,22 @@ class AtlasController:
         self.m = model
 
         # Canvas.
-        self.canvas = canvas(cols=2, show_fps=True, width=1600, height=700, clear_color='black')
+        self.canvas = canvas(show_fps=True, width=1600, height=700, clear_color='black')
+        self.scene = self.canvas.scene(rows=1, cols=2)
 
         # Shared 3D texture.
-        self.tex = context().volume(self.m.vol)
+        self.tex = self.canvas.gpu().context().texture(*self.m.vol.shape)
+        self.tex.upload(self.m.vol)
+        self.tex.set_filter('linear')
 
         # Left panel.
-        self.p0 = self.canvas.panel(col=0, controller='axes', hide_grid=True)
+        self.p0 = self.scene.panel(col=0, controller='axes', hide_grid=True)
         assert self.p0.col == 0
         vargs = (self.m.xlim, self.m.ylim, self.m.zlim)
         self.view0 = AtlasView(self.canvas, self.p0, self.tex, 0, *vargs)
 
         # Right panel.
-        self.p1 = self.canvas.panel(col=1, controller='axes', hide_grid=True)
+        self.p1 = self.scene.panel(col=1, controller='axes', hide_grid=True)
         assert self.p1.col == 1
         self.view1 = AtlasView(self.canvas, self.p1, self.tex, 1, *vargs)
 
@@ -219,13 +222,16 @@ class AtlasController:
 
         # GUI
         self.gui = self.canvas.gui("GUI")
-        self.gui.control(
-            'slider_float', 'ap', vmin=self.m.zlim[0], vmax=self.m.zlim[1])(self.slice_z)
-        self.gui.control(
-            'slider_float', 'ml', vmin=self.m.ylim[0], vmax=self.m.ylim[1])(self.slice_y)
+        self.slider0 = self.gui.control(
+            'slider_float', 'ap', vmin=self.m.zlim[0], vmax=self.m.zlim[1])
+        self.slider0.connect(self.slice_z)
 
-        self.wz = self.gui.get_value('ap')
-        self.wy = self.gui.get_value('ml')
+        self.slider1 = self.gui.control(
+            'slider_float', 'ml', vmin=self.m.ylim[0], vmax=self.m.ylim[1])
+        self.slider1.connect(self.slice_y)
+
+        self.wz = self.slider0.get()
+        self.wy = self.slider1.get()
 
     def _slice(self, axis, value):
         lim = self.m.zlim if axis == 0 else self.m.ylim

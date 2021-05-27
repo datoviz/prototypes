@@ -10,7 +10,8 @@ from datoviz import canvas, run, colormap
 
 
 c = canvas(show_fps=True, pick=True, high_dpi=True)
-panel = c.panel(controller='arcball')
+ctx = c.gpu().context()
+panel = c.scene().panel(controller='arcball')
 visual = panel.visual('volume')
 
 texshape = np.array([456, 320, 528])
@@ -25,7 +26,8 @@ visual.data('length', np.atleast_2d(shape))
 
 # Transfer function.
 fun = np.linspace(0, .05, 256).astype(np.float32)
-transfer = c.transfer(fun)
+transfer = ctx.texture(256, ndim=1)
+transfer.upload(fun)
 visual.texture(transfer)
 
 # X range of the transfer function
@@ -35,13 +37,15 @@ visual.data('transferx', np.array([0, .5]))
 vol = np.load("atlas.npy")
 vol = vol.reshape(texshape)
 vol *= 100
-V = c.volume(vol)
+V = ctx.texture(*texshape)
+V.upload(vol)
 visual.texture(V)
 
 # 3D texture with the labels
 volume_label = np.load("volume_label.npy")
 volume_label = volume_label.reshape(tuple(texshape) + (4,))
-V_label = c.volume(volume_label)
+V_label = c.texture(*volume_label.shape)
+V_label.upload(volume_label)
 visual.texture(V_label, idx=1)
 
 
@@ -81,7 +85,8 @@ gui = c.gui("GUI")
 gui.control("label", "Brain region", value="void")
 
 # Transfer function slider
-@gui.control("slider_float2", "transferx", vmin=0, vmax=1, force_increasing=True)
+s1 = gui.control("slider_float2", "transferx", vmin=0, vmax=1, force_increasing=True)
+@s1.connect
 def on_change(x0, x1):
     visual.data('transferx', np.array([x0, x1]))
 
@@ -89,7 +94,8 @@ def on_change(x0, x1):
 clip = np.zeros(4, dtype=np.float32)
 clip[2] = +1
 
-@gui.control("slider_float", "clip offset", vmin=0, vmax=1, value=0)
+s2 = gui.control("slider_float", "clip offset", vmin=0, vmax=1, value=0)
+@s2.connect
 def on_change(x):
     clip[3] = -x
     visual.data('clip', clip)

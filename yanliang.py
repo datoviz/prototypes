@@ -98,8 +98,8 @@ def ccf2uvw(P):
 # Main script
 # -------------------------------------------------------------------------------------------------
 # Create the scene.
-canvas = canvas()
-panel = canvas.panel(controller='arcball', transpose='xbydzl')
+c = canvas()
+panel = c.scene().panel(controller='arcball', transpose='xbydzl')
 
 # Load the mesh.
 vertices, normals, indices = load_mesh('Isocortex')
