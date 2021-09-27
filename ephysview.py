@@ -140,7 +140,7 @@ class RasterView:
 
         self.v_point.data('pos', pos)
         self.v_point.data('color', color)
-        self.v_point.data('ms', np.array([2.]))
+        self.v_point.data('ms', np.array([3.]))
 
 
 class RasterController:
@@ -152,7 +152,6 @@ class RasterController:
         self.canvas = view.canvas
 
         # Callbacks
-        self.canvas = view.canvas
         self.scene = self.canvas.scene()
         self.canvas.connect(self.on_mouse_click)
 
@@ -163,7 +162,6 @@ class RasterController:
         if not modifiers:
             return
         p = self.scene.panel_at(x, y)
-        print(p, self.v.panel)
         if p != self.v.panel:
             return
         xd, yd = p.pick(x, y)
@@ -189,11 +187,11 @@ class RawDataModel:
         assert self.url_meta
         # Read the first chunk to get the total number of samples.
         info, _ = _dl(self.url_cbin, self.url_ch, self.url_meta, 0)
-        # print(info)
         self.n_samples = info.chopped_total_samples
         self.n_channels = _.shape[1]
         self.sample_rate = float(info.sample_rate)
         self.duration = self.n_samples / self.sample_rate
+        print(f"Load raw data {self.n_samples=}, {self.n_channels=}, {self.duration=}")
 
         assert self.n_samples > 0
         assert self.n_channels > 0
@@ -254,7 +252,7 @@ class RawDataView:
         self.n_channels = n_channels
 
         # Place holder for the data.
-        self.arr = np.zeros((3_000, self.n_channels), dtype=np.int16)
+        self.arr = np.zeros((3_000, self.n_channels), dtype=np.uint16)
         self.tex = canvas.gpu().context().texture(
             *self.arr.shape, dtype=self.arr.dtype, ndim=2, ncomp=1)
         self.tex.upload(self.arr)
@@ -288,15 +286,28 @@ class RawDataView:
         self.v_image.data('pos', np.array([[t0, 0, 0]]), idx=3)
 
     def set_vrange(self, vmin, vmax):
-        self.v_image.data('range', np.array([vmin, vmax]))
+        pass
+        # self.v_image.data('range', np.array([vmin, vmax]))
 
     def set_image(self, img):
         assert img.ndim == 2
         assert img.shape[0] > 0
         assert img.shape[1] == self.n_channels
-        n = min(img.shape[0], self.arr.shape[0])
-        self.arr[:n, :] = img[:n, :]
-        self.tex.upload(self.arr[:n, :])
+        k = .001
+        m = np.quantile(img, k)
+        M = np.quantile(img, 1-k)
+        img_n = (img - m) / (M - m)
+        # img_n = (img - np.median(img)) / np.std(img)
+        img_n *= 40000
+        print(img_n)
+
+        self.tex.upload(img_n.astype(np.uint16))
+        self.v_image.data('range', np.array([0, 1]))
+
+        # n = min(img.shape[0], self.arr.shape[0])
+        # self.arr[:n, :] = img[:n, :] * 1e7
+        # print(self.arr[:n, :])
+        # self.tex.upload(self.arr[:n, :])
         # self._set_tex_coords(n / float(self.arr.shape[0]))
 
 
@@ -310,7 +321,7 @@ class RawDataController:
         self.m = model
         self.v = view
         self.t0 = 0
-        self.t1 = 1
+        self.t1 = 10
 
         # Callbacks
         self.canvas = view.canvas
@@ -318,17 +329,15 @@ class RawDataController:
 
         # GUI
         self.gui = self.canvas.gui("GUI")
-        # self.gui.demo()
         self.input = self.gui.control('input_float', 'time', step=.1, step_fast=1, mode='async')
         self.input.connect(self.on_slider)
 
-        self.slider = self.gui.control(
-            'slider_float2', 'vrange', vmin=-.01, vmax=+.01, value=self.v._init_vrange)
+        # self.slider = self.gui.control(
+        #     'slider_float2', 'vrange', vmin=-.01, vmax=+.01, value=self.v._init_vrange)
 
-        @self.slider.connect
-        def on_vrange(i, j):
-            self.v.set_vrange(i, j)
-            # print(i, j)
+        # @self.slider.connect
+        # def on_vrange(i, j):
+        #     self.v.set_vrange(i, j)
 
     def set_range(self, t0, t1):
         if self._is_fetching:
