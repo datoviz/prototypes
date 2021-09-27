@@ -12,13 +12,17 @@ from pathlib import Path
 
 from joblib import Memory
 import numpy as np
+
 from ibllib.atlas import AllenAtlas
-from oneibl.one import ONE
+from ibllib.io.spikeglx import download_raw_partial
+from one.api import ONE
 
 from datoviz import canvas, run, colormap
 
 
 logger = logging.getLogger(__name__)
+
+one = ONE()
 
 
 
@@ -54,7 +58,15 @@ def get_data_urls(eid, probe_idx=0):
         if fr['data_url']:
             url_ch = fr['data_url']
 
-    return url_cbin, url_ch
+    # Find URL to .meta file
+    dsets = one.alyx.rest(
+        'datasets', 'list', session=eid,
+        django='name__icontains,ap.meta,collection__endswith,probe%02d' % probe_idx)
+    for fr in dsets[0]['file_records']:
+        if fr['data_url']:
+            url_meta = fr['data_url']
+
+    return url_cbin, url_ch, url_meta
 
 
 one = ONE()
@@ -64,9 +76,9 @@ location = Path('~/.one_cache/').expanduser()
 memory = Memory(location, verbose=0)
 
 @memory.cache
-def _dl(url_cbin, url_ch, chunk_idx):
-    reader = one.download_raw_partial(url_cbin, url_ch, chunk_idx, chunk_idx)
-    return reader.cmeta, reader[:]
+def _dl(url_cbin, url_ch, url_meta, chunk_idx):
+    reader = download_raw_partial(url_cbin, url_ch, url_meta, chunk_idx, chunk_idx)
+    return reader._raw.cmeta, reader[:]
 
 
 def _is_cached(f, args, kwargs):
@@ -82,7 +94,7 @@ def _load_spikes(probe_id):
         'clusters.brainLocationIds_ccf_2017']
     dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id)
     dsets_int = [[d for d in dsets if d['dataset_type'] in _][0] for _ in dtypes]
-    return [np.load(_) for _ in one.download_datasets(dsets_int)]
+    return [np.load(_) for _ in one._download_datasets(dsets_int) if str(_).endswith('.npy')]
 
 
 
@@ -171,11 +183,12 @@ class RawDataModel:
     def __init__(self, eid, probe_idx=0):
         self.eid = eid
         self.probe_idx = probe_idx
-        self.url_cbin, self.url_ch = get_data_urls(eid, probe_idx=probe_idx)
+        self.url_cbin, self.url_ch, self.url_meta = get_data_urls(eid, probe_idx=probe_idx)
         assert self.url_cbin
         assert self.url_ch
+        assert self.url_meta
         # Read the first chunk to get the total number of samples.
-        info, _ = _dl(self.url_cbin, self.url_ch, 0)
+        info, _ = _dl(self.url_cbin, self.url_ch, self.url_meta, 0)
         # print(info)
         self.n_samples = info.chopped_total_samples
         self.n_channels = _.shape[1]
@@ -188,7 +201,7 @@ class RawDataModel:
         assert self.duration > 0
 
     def _download_chunk(self, chunk_idx):
-        _, arr = _dl(self.url_cbin, self.url_ch, chunk_idx)
+        _, arr = _dl(self.url_cbin, self.url_ch, self.url_meta, chunk_idx)
         return arr
 
     def _get_range_chunks(self, t0, t1):
@@ -204,7 +217,7 @@ class RawDataModel:
         return i0, i1
 
     def is_chunk_cached(self, chunk_idx):
-        return _is_cached(_dl, (self.url_cbin, self.url_ch, chunk_idx), {})
+        return _is_cached(_dl, (self.url_cbin, self.url_ch, self.url_meta, chunk_idx), {})
 
     def get_raw_data(self, t0, t1):
         t0 = np.clip(t0, 0, self.duration)
@@ -441,7 +454,7 @@ if __name__ == '__main__':
     m_raster = RasterModel(insertion_id)
     m_raw = RawDataModel(session_id)
 
-    # Create the Visky view.
+    # Create the Datoviz view.
     c = canvas(width=1600, height=800, show_fps=True)
     scene = c.scene(rows=1, cols=2)
 
