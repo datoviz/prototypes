@@ -82,6 +82,8 @@ def _load_spikes(probe_id):
     st, sa, sc, sd, cr = (
         np.load(_) for _ in one._download_datasets(dsets_int) if str(_).endswith('.npy'))
 
+    sd[np.isnan(sd)] = sd[~np.isnan(sd)].min()
+
     assert 100 < len(cr) < 1000
     # Brain region colors
     atlas = AllenAtlas(25)
@@ -103,6 +105,9 @@ def _load_spikes(probe_id):
 class RasterModel:
     def __init__(self, probe_id):
         self.st, self.sa, self.sc, self.sd, self.spike_colors = _load_spikes(probe_id)
+        self.depth_min = self.sd.min()
+        self.depth_max = self.sd.max()
+        assert self.depth_min < self.depth_max
         logger.info(f"Loaded {len(self.st)} spikes")
 
 
@@ -244,11 +249,11 @@ class EphysView:
         assert n_channels > 0
         self.n_channels = n_channels
 
-        n_samples = 3000
+        self.n_samples_tex = 3000
         self.tex = canvas.gpu().context().texture(
-            n_samples, n_channels, dtype=np.dtype(np.uint8), ndim=2, ncomp=4)
+            self.n_samples_tex, n_channels, dtype=np.dtype(np.uint8), ndim=2, ncomp=4)
         # Placeholder for the data so as to keep the data to upload in memory.
-        self._arr = np.empty((n_samples, n_channels, 4), dtype=np.uint8)
+        self._arr = np.empty((self.n_samples_tex, n_channels, 4), dtype=np.uint8)
 
         # Image visual
         self.v_image = self.panel.visual('image')
@@ -266,10 +271,10 @@ class EphysView:
 
     def set_xrange(self, t0, t1):
         # Top left, top right, bottom right, bottom left
-        self.v_image.data('pos', np.array([[t0, self.n_channels, 0]]), idx=0)
-        self.v_image.data('pos', np.array([[t1, self.n_channels, 0]]), idx=1)
-        self.v_image.data('pos', np.array([[t1, 0, 0]]), idx=2)
-        self.v_image.data('pos', np.array([[t0, 0, 0]]), idx=3)
+        self.v_image.data('pos', np.array([[t0, 0, 0]]), idx=0)
+        self.v_image.data('pos', np.array([[t1, 0, 0]]), idx=1)
+        self.v_image.data('pos', np.array([[t1, self.n_channels, 0]]), idx=2)
+        self.v_image.data('pos', np.array([[t0, self.n_channels, 0]]), idx=3)
 
     def set_image(self, img):
         assert img.ndim == 3
@@ -298,11 +303,13 @@ class EphysController:
     t0 = 0
     t1 = 1
 
-    def __init__(self, model, view):
+    def __init__(self, model, view, raster_model=None):
         self.filters = [None]
         self.m = model
+        assert raster_model
+        self.raster_model = raster_model
         self.v = view
-        self.set_range(0, .25)
+        self.set_range(0, .1)
         assert self.vmin is not None
         assert self.vmax is not None
 
@@ -320,9 +327,36 @@ class EphysController:
         def on_vrange(i, j):
             self.set_vrange(i, j)
 
-    def highlight(self, img, it0, it1, ic0, ic1, color):
+    def highlight_area(self, img, it0, it1, ic0, ic1, color):
+        it0 = np.clip(it0, 0, self.m.n_samples - 1)
+        it1 = np.clip(it1, 0, self.m.n_samples - 1)
+        ic0 = np.clip(ic0, 0, self.m.n_channels - 1)
+        ic1 = np.clip(ic1, 0, self.m.n_channels - 1)
         img[it0:it1, ic0:ic1, :3] = (img[it0:it1, ic0:ic1, :3] * color).astype(img.dtype)
         return img
+
+    def highlight_spike(self, img, t, depth, color):
+
+        if t < self.t0 or t > self.t1:
+            logger.debug("Spike to be highlighted is beyond the bounds of the current data area")
+            return
+
+        assert self.raster_model, "The raster model must be passed to the EphysController constructor"
+        assert self.m.n_channels > 0
+        assert self.raster_model.depth_min < self.raster_model.depth_max
+
+        dm, dM = self.raster_model.depth_min, self.raster_model.depth_max
+        x = (depth - dm) / (dM - dm)
+        assert 0 <= x <= 1
+        ic = int(round(x * (self.m.n_channels - 1)))
+
+        t = (t - self.t0) / float(self.t1 - self.t0)
+        assert 0 <= t <= 1
+        it = int(round(t * (self.v.n_samples_tex - 1)))
+
+        nc = 5
+        nt = 15
+        return self.highlight_area(img, it - nt, it + nt, ic - nc, ic + nc, color)
 
     def to_image(self, data):
         # CAR
@@ -368,9 +402,20 @@ class EphysController:
         self.data_f = self.filter(self.data)
 
         # Apply colormap.
-        self.img = self.to_image(self.data_f)
+        img = self.to_image(self.data_f)
+
+        # Highlight the spikes.
+        imin = np.searchsorted(self.raster_model.st, self.t0)
+        imax = np.searchsorted(self.raster_model.st, self.t1)
+        for i in range(imin, imax):
+            t = self.raster_model.st[i]
+            d = self.raster_model.sd[i]
+            color = self.raster_model.spike_colors[i]
+            color = color[:3] / 255.0
+            img = self.highlight_spike(img, t, d, color)
 
         # Update the image.
+        self.img = img
         self.v.set_image(self.img)
 
     def set_vrange(self, vmin, vmax):
@@ -472,20 +517,18 @@ if __name__ == '__main__':
     p0 = scene.panel(row=0, controller='axes', hide_grid=False)
     p1 = scene.panel(row=1, controller='axes', hide_grid=True)
 
-    # Ephys view.
-    v_ephys = EphysView(c, p1, n_channels=m_ephys.n_channels)
-    c_ephys = EphysController(m_ephys, v_ephys)
-
-    @c_ephys.add_filter
-    def my_filter(data):
-        return data - np.median(data, axis=1).reshape((-1, 1))
-
     # Raster view.
     m_raster = RasterModel(insertion_id)
     v_raster = RasterView(c, p0)
     c_raster = RasterController(m_raster, v_raster)
 
-    # v_ephys.set_image(c_ephys.highlight(c_ephys.img, 10, 200, 10, 20, (.9, .5, .1)))
+    # Ephys view.
+    v_ephys = EphysView(c, p1, n_channels=m_ephys.n_channels)
+    c_ephys = EphysController(m_ephys, v_ephys, raster_model=m_raster)
+
+    @c_ephys.add_filter
+    def my_filter(data):
+        return data - np.median(data, axis=1).reshape((-1, 1))
 
     # Link between the panels.
     @c_raster.on_time_select
