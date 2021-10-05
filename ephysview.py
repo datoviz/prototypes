@@ -22,9 +22,6 @@ from datoviz import canvas, run, colormap
 
 logger = logging.getLogger(__name__)
 
-one = ONE()
-
-
 
 # -------------------------------------------------------------------------------------------------
 # Utils
@@ -41,7 +38,7 @@ def _index_of(arr, lookup):
     return tmp[arr]
 
 
-def get_data_urls(eid, probe_idx=0):
+def get_data_urls(eid, probe_idx=0, one=None):
     # Find URL to .cbin file
     dsets = one.alyx.rest(
         'datasets', 'list', session=eid,
@@ -69,33 +66,19 @@ def get_data_urls(eid, probe_idx=0):
     return url_cbin, url_ch, url_meta
 
 
-one = ONE()
-
-# Disk cache of the downloading
 location = Path('~/.one_cache/').expanduser()
 memory = Memory(location, verbose=0)
-
-@memory.cache
-def _dl(url_cbin, url_ch, url_meta, chunk_idx):
-    reader = download_raw_partial(url_cbin, url_ch, url_meta, chunk_idx, chunk_idx)
-    return reader._raw.cmeta, reader[:]
-
-
-def _is_cached(f, args, kwargs):
-    func_id, args_id = f._get_output_identifiers(*args, **kwargs)
-    return (f._check_previous_func_code(stacklevel=4)
-            and f.store_backend.contains_item([func_id, args_id]))
 
 
 @memory.cache
 def _load_spikes(probe_id):
+    one = ONE()
     dtypes = [
         'spikes.times', 'spikes.amps', 'spikes.clusters', 'spikes.depths',
         'clusters.brainLocationIds_ccf_2017']
     dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id)
     dsets_int = [[d for d in dsets if d['dataset_type'] in _][0] for _ in dtypes]
     return [np.load(_) for _ in one._download_datasets(dsets_int) if str(_).endswith('.npy')]
-
 
 
 # -------------------------------------------------------------------------------------------------
@@ -172,35 +155,47 @@ class RasterController:
         self._time_select_cb = f
 
 
-
 # -------------------------------------------------------------------------------------------------
 # Raw data viewer
 # -------------------------------------------------------------------------------------------------
 
-class RawDataModel:
-    def __init__(self, eid, probe_idx=0):
+class EphysModel:
+    def __init__(self, eid, probe_idx=0, one=None):
         self.eid = eid
         self.probe_idx = probe_idx
-        self.url_cbin, self.url_ch, self.url_meta = get_data_urls(eid, probe_idx=probe_idx)
-        assert self.url_cbin
-        assert self.url_ch
-        assert self.url_meta
-        # Read the first chunk to get the total number of samples.
-        info, _ = _dl(self.url_cbin, self.url_ch, self.url_meta, 0)
+        self.one = one
+
+        self._download_chunk = memory.cache(self._download_chunk)
+
+        print(f"Downloading first chunk of ephys data {eid}, probe #{probe_idx}")
+        info, arr = self._download_chunk(eid, probe_idx=probe_idx, chunk_idx=0)
+        assert info
+        assert arr.size
+
         self.n_samples = info.chopped_total_samples
-        self.n_channels = _.shape[1]
-        self.sample_rate = float(info.sample_rate)
-        self.duration = self.n_samples / self.sample_rate
-        print(f"Load raw data {self.n_samples=}, {self.n_channels=}, {self.duration=}")
-
         assert self.n_samples > 0
-        assert self.n_channels > 0
-        assert self.sample_rate > 0
-        assert self.duration > 0
 
-    def _download_chunk(self, chunk_idx):
-        _, arr = _dl(self.url_cbin, self.url_ch, self.url_meta, chunk_idx)
-        return arr
+        self.n_channels = arr.shape[1]
+        assert self.n_channels > 0
+
+        self.sample_rate = float(info.sample_rate)
+        assert self.sample_rate > 1000
+
+        self.duration = self.n_samples / self.sample_rate
+        assert self.duration > 0
+        print(
+            f"Downloaded first chunk of ephys data "
+            f"{self.n_samples=}, {self.n_channels=}, {self.duration=}")
+
+    # return tuple (info, array)
+    def _download_chunk(self, eid, probe_idx=0, chunk_idx=0):
+        one = ONE()
+        url_cbin, url_ch, url_meta = get_data_urls(eid, probe_idx=probe_idx, one=one)
+        reader = download_raw_partial(url_cbin, url_ch, url_meta, chunk_idx, chunk_idx)
+        return reader._raw.cmeta, reader[:]
+
+    def get_chunk(self, chunk_idx):
+        return self._download_chunk(self.eid, self.probe_idx, chunk_idx=chunk_idx)[1]
 
     def _get_range_chunks(self, t0, t1):
         # Chunk idxs, assuming 1 second chunk
@@ -214,10 +209,7 @@ class RawDataModel:
 
         return i0, i1
 
-    def is_chunk_cached(self, chunk_idx):
-        return _is_cached(_dl, (self.url_cbin, self.url_ch, self.url_meta, chunk_idx), {})
-
-    def get_raw_data(self, t0, t1):
+    def get_data(self, t0, t1, filter=None):  # float32
         t0 = np.clip(t0, 0, self.duration)
         t1 = np.clip(t1, 0, self.duration)
         assert t0 < t1
@@ -227,7 +219,7 @@ class RawDataModel:
         i0, i1 = self._get_range_chunks(t0, t1)
 
         # Download the chunks.
-        arr = np.vstack([self._download_chunk(i) for i in range(i0, i1 + 1)])
+        arr = np.vstack([self.get_chunk(i) for i in range(i0, i1 + 1)])
         assert arr.ndim == 2
         assert arr.shape[1] == self.n_channels, (arr.shape, self.n_channels)
 
@@ -240,7 +232,13 @@ class RawDataModel:
         assert s1 - s0 == expected_samples, (s0, s1, expected_samples)
         out = arr[s0:s1, :]
         assert out.shape == (expected_samples, self.n_channels)
+
+        # TODO: filter
         return out
+
+    def get_image(self, data, cmap=None):  # cvec4
+        # TODO
+        pass
 
 
 class RawDataView:
@@ -449,42 +447,49 @@ class RawDataController:
         self._do_update_control = True
 
 
-
 # -------------------------------------------------------------------------------------------------
 # Entry point
 # -------------------------------------------------------------------------------------------------
 
-if __name__ == '__main__':
-
+def get_eid():
+    return 'f25642c6-27a5-4a97-9ea0-06652db79fbd'
+    one = ONE()
     insertions = one.alyx.rest('insertions', 'list', dataset_type='channels.mlapdv')
     insertion_id = insertions[0]['id']
-    session_id = insertions[0]['session_info']['id']
+    return insertions[0]['session_info']['id']
 
-    m_raster = RasterModel(insertion_id)
-    m_raw = RawDataModel(session_id)
 
-    # Create the Datoviz view.
-    c = canvas(width=1600, height=800, show_fps=True)
-    scene = c.scene(rows=1, cols=2)
+if __name__ == '__main__':
+    eid = get_eid()
+    m_ephys = EphysModel(eid)
+    data = m_ephys.get_data(1.1, 2.9)
+    print(data.shape)
 
-    # Panels.
-    p0 = scene.panel(col=0, controller='axes', hide_grid=False)
-    p1 = scene.panel(col=1, controller='axes', hide_grid=True)
+    # m_raster = RasterModel(insertion_id)
+    # m_raw = RawDataModel(session_id)
 
-    # Raster view.
-    v_raster = RasterView(c, p0)
-    c_raster = RasterController(m_raster, v_raster)
-    c_raster.set_data()
+    # # Create the Datoviz view.
+    # c = canvas(width=1600, height=800, show_fps=True)
+    # scene = c.scene(rows=1, cols=2)
 
-    # Raw data view.
-    v_raw = RawDataView(c, p1, m_raw.n_channels, vrange=(+.00231, -.00169))
-    c_raw = RawDataController(m_raw, v_raw)
-    c_raw.set_range(0, .1)
+    # # Panels.
+    # p0 = scene.panel(col=0, controller='axes', hide_grid=False)
+    # p1 = scene.panel(col=1, controller='axes', hide_grid=True)
 
-    # Link between the panels.
-    @c_raster.on_time_select
-    def on_time_select(t):
-        c_raw._update_control()
-        c_raw.go_to(t)
+    # # Raster view.
+    # v_raster = RasterView(c, p0)
+    # c_raster = RasterController(m_raster, v_raster)
+    # c_raster.set_data()
 
-    run()
+    # # Raw data view.
+    # v_raw = RawDataView(c, p1, m_raw.n_channels, vrange=(+.00231, -.00169))
+    # c_raw = RawDataController(m_raw, v_raw)
+    # c_raw.set_range(0, .1)
+
+    # # Link between the panels.
+    # @c_raster.on_time_select
+    # def on_time_select(t):
+    #     c_raw._update_control()
+    #     c_raw.go_to(t)
+
+    # run()
