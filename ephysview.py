@@ -112,7 +112,7 @@ class RasterView:
         self.panel = panel
         self.v_point = self.panel.visual('point')
 
-    def set_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors):
+    def set_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors, ms=2):
         N = len(spike_times)
         assert spike_times.shape == spike_depths.shape == spike_clusters.shape
 
@@ -120,7 +120,7 @@ class RasterView:
 
         self.v_point.data('pos', pos)
         self.v_point.data('color', spike_colors)
-        self.v_point.data('ms', np.array([2.]))
+        self.v_point.data('ms', np.array([ms]))
 
 
 class RasterController:
@@ -292,6 +292,11 @@ class EphysController:
     _cur_filter_idx = 0
     vmin = None
     vmax = None
+    data = None
+    data_f = None
+    img = None
+    t0 = 0
+    t1 = 1
 
     def __init__(self, model, view):
         self.filters = [None]
@@ -315,16 +320,23 @@ class EphysController:
         def on_vrange(i, j):
             self.set_vrange(i, j)
 
+    def highlight(self, img, it0, it1, ic0, ic1, color):
+        img[it0:it1, ic0:ic1, :3] = (img[it0:it1, ic0:ic1, :3] * color).astype(img.dtype)
+        return img
+
     def to_image(self, data):
         # CAR
         data -= data.mean(axis=0)
+
         # Vrange
         self.vmin = data.min() if self.vmin is None else self.vmin
         self.vmax = data.max() if self.vmax is None else self.vmax
+
         # Colormap
         img = colormap(data.ravel().astype(np.double), vmin=self.vmin, vmax=self.vmax, cmap='gray')
         img = img.reshape(data.shape + (-1,))
         assert img.shape == data.shape[:2] + (4,)
+
         return img
 
     def set_range(self, t0, t1):
@@ -352,14 +364,14 @@ class EphysController:
         self.v.set_xrange(t0, t1)
 
         # Filter.
-        data = self.m.get_data(t0, t1)
-        data_f = self.filter(data)
+        self.data = self.m.get_data(t0, t1)
+        self.data_f = self.filter(self.data)
 
         # Apply colormap.
-        img = self.to_image(data_f)
+        self.img = self.to_image(self.data_f)
 
         # Update the image.
-        self.v.set_image(img)
+        self.v.set_image(self.img)
 
     def set_vrange(self, vmin, vmax):
         self.vmin = vmin
@@ -472,6 +484,8 @@ if __name__ == '__main__':
     m_raster = RasterModel(insertion_id)
     v_raster = RasterView(c, p0)
     c_raster = RasterController(m_raster, v_raster)
+
+    # v_ephys.set_image(c_ephys.highlight(c_ephys.img, 10, 200, 10, 20, (.9, .5, .1)))
 
     # Link between the panels.
     @c_raster.on_time_select
