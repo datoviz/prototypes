@@ -7,7 +7,6 @@ Python example of an interactive raw ephys data viewer.
 # -------------------------------------------------------------------------------------------------
 
 import logging
-import math
 from pathlib import Path
 
 from joblib import Memory
@@ -17,10 +16,12 @@ from ibllib.atlas import AllenAtlas
 from ibllib.io.spikeglx import download_raw_partial
 from one.api import ONE
 
-from datoviz import canvas, run, colormap
+from datoviz import canvas, run, colormap, add_default_handler
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('datoviz')
+logger.setLevel('DEBUG')
+logger.propagate = False
 
 
 # -------------------------------------------------------------------------------------------------
@@ -94,7 +95,7 @@ class RasterModel:
         self.sc = self.sc[:n]
         self.sd = self.sd[:n]
         self.cr = self.cr[:n]
-        print(f"Loaded {len(self.st)} spikes")
+        logger.info(f"Loaded {len(self.st)} spikes")
 
 
 class RasterView:
@@ -167,7 +168,7 @@ class EphysModel:
 
         self._download_chunk = memory.cache(self._download_chunk)
 
-        print(f"Downloading first chunk of ephys data {eid}, probe #{probe_idx}")
+        logger.info(f"Downloading first chunk of ephys data {eid}, probe #{probe_idx}")
         info, arr = self._download_chunk(eid, probe_idx=probe_idx, chunk_idx=0)
         assert info
         assert arr.size
@@ -183,7 +184,7 @@ class EphysModel:
 
         self.duration = self.n_samples / self.sample_rate
         assert self.duration > 0
-        print(
+        logger.info(
             f"Downloaded first chunk of ephys data "
             f"{self.n_samples=}, {self.n_channels=}, {self.duration=}")
 
@@ -233,40 +234,30 @@ class EphysModel:
         out = arr[s0:s1, :]
         assert out.shape == (expected_samples, self.n_channels)
 
-        # TODO: filter
+        # HACK: the last column seems corrupted
+        out[:, -1] = out[:, -2]
         return out
 
-    def get_image(self, data, cmap=None):  # cvec4
-        # TODO
-        pass
 
-
-class RawDataView:
-    def __init__(self, canvas, panel, n_channels, vrange=()):
+class EphysView:
+    def __init__(self, canvas, panel, n_channels):
         self.canvas = canvas
         self.panel = panel
 
         assert n_channels > 0
         self.n_channels = n_channels
 
-        # Place holder for the data.
-        self.arr = np.zeros((3_000, self.n_channels), dtype=np.uint16)
+        n_samples = 3000
         self.tex = canvas.gpu().context().texture(
-            *self.arr.shape, dtype=self.arr.dtype, ndim=2, ncomp=1)
-        self.tex.upload(self.arr)
+            n_samples, n_channels, dtype=np.dtype(np.uint8), ndim=2, ncomp=4)
+        # Placeholder for the data so as to keep the data to upload in memory.
+        self._arr = np.empty((n_samples, n_channels, 4), dtype=np.uint8)
 
-        # Image cmap visual
-        self.v_image = self.panel.visual('image_cmap')
+        # Image visual
+        self.v_image = self.panel.visual('image')
         self.v_image.texture(self.tex)
 
-        self.v_image.data('colormap', np.array([26]))
-
-        # Initialize the POS prop.
         self.set_xrange(0, 1)
-        if vrange:
-            self.set_vrange(*vrange)
-        self._init_vrange = vrange
-
         self._set_tex_coords(1)
 
     def _set_tex_coords(self, x=1):
@@ -283,43 +274,35 @@ class RawDataView:
         self.v_image.data('pos', np.array([[t1, 0, 0]]), idx=2)
         self.v_image.data('pos', np.array([[t0, 0, 0]]), idx=3)
 
-    def set_vrange(self, vmin, vmax):
-        pass
-        # self.v_image.data('range', np.array([vmin, vmax]))
-
     def set_image(self, img):
-        assert img.ndim == 2
-        assert img.shape[0] > 0
-        assert img.shape[1] == self.n_channels
-        k = .001
-        m = np.quantile(img, k)
-        M = np.quantile(img, 1-k)
-        img_n = (img - m) / (M - m)
-        # img_n = (img - np.median(img)) / np.std(img)
-        img_n *= 40000
-        print(img_n)
-
-        self.tex.upload(img_n.astype(np.uint16))
-        self.v_image.data('range', np.array([0, 1]))
-
-        # n = min(img.shape[0], self.arr.shape[0])
-        # self.arr[:n, :] = img[:n, :] * 1e7
-        # print(self.arr[:n, :])
-        # self.tex.upload(self.arr[:n, :])
-        # self._set_tex_coords(n / float(self.arr.shape[0]))
+        assert img.ndim == 3
+        assert img.shape[2] == 4
+        assert img.dtype == np.uint8
+        # Resize the texture if needed.
+        if self.tex.shape != img.shape:
+            self.tex.resize(img.shape[0], img.shape[1])
+            self._arr.resize(img.shape)
+        assert self.tex.shape == img.shape
+        assert self._arr.shape == img.shape
+        assert self._arr.dtype == img.dtype
+        self._arr[:] = img[:]
+        self.tex.upload(self._arr)
 
 
-class RawDataController:
+class EphysController:
     _is_fetching = False
-    _do_update_control = True
-    filters = (None, 'filter_1', 'filter_2')
+    # _do_update_control = True
     _cur_filter_idx = 0
+    vmin = None
+    vmax = None
 
     def __init__(self, model, view):
+        self.filters = [None]
         self.m = model
         self.v = view
-        self.t0 = 0
-        self.t1 = 10
+        self.set_range(0, .1)
+        assert self.vmin is not None
+        assert self.vmax is not None
 
         # Callbacks
         self.canvas = view.canvas
@@ -327,15 +310,25 @@ class RawDataController:
 
         # GUI
         self.gui = self.canvas.gui("GUI")
-        self.input = self.gui.control('input_float', 'time', step=.1, step_fast=1, mode='async')
-        self.input.connect(self.on_slider)
+        # self.input = self.gui.control('input_float', 'time', step=.1, step_fast=1, mode='async')
+        # self.input.connect(self.on_slider)
+        self.slider = self.gui.control(
+            'slider_float2', 'vrange', vmin=self.vmin, vmax=self.vmax)
+        @self.slider.connect
+        def on_vrange(i, j):
+            self.set_vrange(i, j)
 
-        # self.slider = self.gui.control(
-        #     'slider_float2', 'vrange', vmin=-.01, vmax=+.01, value=self.v._init_vrange)
-
-        # @self.slider.connect
-        # def on_vrange(i, j):
-        #     self.v.set_vrange(i, j)
+    def to_image(self, data):
+        # CAR
+        data -= data.mean(axis=0)
+        # Vrange
+        self.vmin = data.min() if self.vmin is None else self.vmin
+        self.vmax = data.max() if self.vmax is None else self.vmax
+        # Colormap
+        img = colormap(data.ravel().astype(np.double), vmin=self.vmin, vmax=self.vmax, cmap='gray')
+        img = img.reshape(data.shape + (-1,))
+        assert img.shape == data.shape[:2] + (4,)
+        return img
 
     def set_range(self, t0, t1):
         if self._is_fetching:
@@ -352,52 +345,46 @@ class RawDataController:
         assert abs(t1 - t0 - d) < 1e-6
         assert t0 < t1
         self.t0, self.t1 = t0, t1
-        print("Set time range %.3f %.3f" % (t0, t1))
+        logger.info("Set time range %.3f %.3f" % (t0, t1))
 
-        # Update slider only when changing the time by using another method than the slider.
-        if self._do_update_control:
-            self._update_control()
+        # # Update slider only when changing the time by using another method than the slider.
+        # if self._do_update_control:
+        #     self._update_control()
 
         # Update the positions.
         self.v.set_xrange(t0, t1)
 
-        # If fetching from the Internet, clear the array until we have the data.
-        i0, i1 = self.m._get_range_chunks(t0, t1)
-        arr = np.zeros((int((t1 - t0) * self.m.sample_rate), self.m.n_channels), dtype=np.int16)
-        if not self.m.is_chunk_cached(i0) or not self.m.is_chunk_cached(i1):
-            self.v.set_image(arr)
-
-        # Fetch the raw data, SLOW when fetching from the Internet.
-        self._is_fetching = True
-        arr = self.m.get_raw_data(t0, t1)
-        self._is_fetching = False
-
-        # CAR
-        # TODO: as an independent filter?
-        arr -= arr.mean(axis=0).astype(arr.dtype)
-
         # Filter.
-        arr = self.filter(arr)
+        data = self.m.get_data(t0, t1)
+        data_f = self.filter(data)
+
+        # Apply colormap.
+        img = self.to_image(data_f)
 
         # Update the image.
-        self.v.set_image(arr)
+        self.v.set_image(img)
 
-    def filter_1(self, arr):
-        return arr * 2
+    def set_vrange(self, vmin, vmax):
+        self.vmin = vmin
+        self.vmax = vmax
+        self.update()
 
-    def filter_2(self, arr):
-        return arr * .5
+    def update(self):
+        self.set_range(self.t0, self.t1)
 
     def filter(self, arr):
-        f = self.filters[self._cur_filter_idx]
+        f = self.filters[self._cur_filter_idx % len(self.filters)]
+        logger.info(f"Apply filter {(f.__name__ if f else 'default')}")
         if not f:
             return arr
-        print(f"Apply filter {f}")
-        return getattr(self, f)(arr)
+        arr_f = f(arr)
+        assert arr_f.dtype == arr.dtype
+        assert arr_f.shape == arr.shape
+        return arr_f
 
     def next_filter(self):
         self._cur_filter_idx = (self._cur_filter_idx + 1) % len(self.filters)
-        self.set_range(self.t0, self.t1)
+        self.update()
 
     def go_left(self, shift):
         d = self.t1 - self.t0
@@ -436,15 +423,18 @@ class RawDataController:
         if key == 'f':
             self.next_filter()
 
-    def _update_control(self,):
-        # Update the input float value.
-        self.input.set(float((self.t0 + self.t1) / 2))
+    def add_filter(self, f):
+        self.filters.append(f)
 
-    def on_slider(self, value):
-        # HACK: do not update the control programmatically when it's being used with the slider.
-        self._do_update_control = False
-        self.go_to(value)
-        self._do_update_control = True
+    # def _update_control(self,):
+    #     # Update the input float value.
+    #     self.input.set(float((self.t0 + self.t1) / 2))
+
+    # def on_slider(self, value):
+    #     # HACK: do not update the control programmatically when it's being used with the slider.
+    #     self._do_update_control = False
+    #     self.go_to(value)
+    #     self._do_update_control = True
 
 
 # -------------------------------------------------------------------------------------------------
@@ -462,28 +452,28 @@ def get_eid():
 if __name__ == '__main__':
     eid = get_eid()
     m_ephys = EphysModel(eid)
-    data = m_ephys.get_data(1.1, 2.9)
-    print(data.shape)
 
+    # Create the Datoviz view.
+    c = canvas(width=1600, height=800, show_fps=True)
+    scene = c.scene(rows=1, cols=2)
+
+    # Panels.
+    p0 = scene.panel(col=0, controller='axes', hide_grid=False)
+    p1 = scene.panel(col=1, controller='axes', hide_grid=True)
+
+    # Ephys view.
+    v_ephys = EphysView(c, p1, n_channels=m_ephys.n_channels)
+    c_ephys = EphysController(m_ephys, v_ephys)
+
+    @c_ephys.add_filter
+    def my_filter(data):
+        return data - np.median(data, axis=1).reshape((-1, 1))
+
+    # Raster view.
     # m_raster = RasterModel(insertion_id)
-    # m_raw = RawDataModel(session_id)
-
-    # # Create the Datoviz view.
-    # c = canvas(width=1600, height=800, show_fps=True)
-    # scene = c.scene(rows=1, cols=2)
-
-    # # Panels.
-    # p0 = scene.panel(col=0, controller='axes', hide_grid=False)
-    # p1 = scene.panel(col=1, controller='axes', hide_grid=True)
-
-    # # Raster view.
     # v_raster = RasterView(c, p0)
     # c_raster = RasterController(m_raster, v_raster)
     # c_raster.set_data()
-
-    # # Raw data view.
-    # v_raw = RawDataView(c, p1, m_raw.n_channels, vrange=(+.00231, -.00169))
-    # c_raw = RawDataController(m_raw, v_raw)
     # c_raw.set_range(0, .1)
 
     # # Link between the panels.
@@ -492,4 +482,4 @@ if __name__ == '__main__':
     #     c_raw._update_control()
     #     c_raw.go_to(t)
 
-    # run()
+    run()
