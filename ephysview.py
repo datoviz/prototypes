@@ -79,7 +79,21 @@ def _load_spikes(probe_id):
         'clusters.brainLocationIds_ccf_2017']
     dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id)
     dsets_int = [[d for d in dsets if d['dataset_type'] in _][0] for _ in dtypes]
-    return [np.load(_) for _ in one._download_datasets(dsets_int) if str(_).endswith('.npy')]
+    st, sa, sc, sd, cr = (
+        np.load(_) for _ in one._download_datasets(dsets_int) if str(_).endswith('.npy'))
+
+    assert 100 < len(cr) < 1000
+    # Brain region colors
+    atlas = AllenAtlas(25)
+    n = len(atlas.regions.rgb)
+    alpha = 255 * np.ones((n, 1))
+    rgb = np.hstack((atlas.regions.rgb, alpha)).astype(np.uint8)
+    spike_regions = cr[sc]
+    # HACK: spurious values
+    spike_regions[spike_regions > 2000] = 0
+    color = rgb[spike_regions]
+
+    return st, sa, sc, sd, color
 
 
 # -------------------------------------------------------------------------------------------------
@@ -88,13 +102,7 @@ def _load_spikes(probe_id):
 
 class RasterModel:
     def __init__(self, probe_id):
-        self.st, self.sa, self.sc, self.sd, self.cr = _load_spikes(probe_id)
-        n = 10000
-        self.st = self.st[:n]
-        self.sa = self.sa[:n]
-        self.sc = self.sc[:n]
-        self.sd = self.sd[:n]
-        self.cr = self.cr[:n]
+        self.st, self.sa, self.sc, self.sd, self.spike_colors = _load_spikes(probe_id)
         logger.info(f"Loaded {len(self.st)} spikes")
 
 
@@ -104,27 +112,15 @@ class RasterView:
         self.panel = panel
         self.v_point = self.panel.visual('point')
 
-        self.atlas = AllenAtlas(25)
-
-    def set_spikes(self, spike_times, spike_clusters, spike_depths, brain_regions):
+    def set_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors):
         N = len(spike_times)
         assert spike_times.shape == spike_depths.shape == spike_clusters.shape
-        assert 100 < len(brain_regions) < 1000
 
         pos = np.c_[spike_times, spike_depths, np.zeros(N)]
 
-        # Brain region colors
-        n = len(self.atlas.regions.rgb)
-        alpha = 255 * np.ones((n, 1))
-        rgb = np.hstack((self.atlas.regions.rgb, alpha)).astype(np.uint8)
-        spike_regions = brain_regions[spike_clusters]
-        # HACK: spurious values
-        spike_regions[spike_regions > 2000] = 0
-        color = rgb[spike_regions]
-
         self.v_point.data('pos', pos)
-        self.v_point.data('color', color)
-        self.v_point.data('ms', np.array([3.]))
+        self.v_point.data('color', spike_colors)
+        self.v_point.data('ms', np.array([2.]))
 
 
 class RasterController:
@@ -134,13 +130,14 @@ class RasterController:
         self.m = model
         self.v = view
         self.canvas = view.canvas
+        self.set_data()
 
         # Callbacks
         self.scene = self.canvas.scene()
         self.canvas.connect(self.on_mouse_click)
 
     def set_data(self):
-        self.v.set_spikes(self.m.st, self.m.sc, self.m.sd, self.m.cr)
+        self.v.set_spikes(self.m.st, self.m.sc, self.m.sd, self.m.spike_colors)
 
     def on_mouse_click(self, x, y, button=None, modifiers=()):
         if not modifiers:
@@ -300,7 +297,7 @@ class EphysController:
         self.filters = [None]
         self.m = model
         self.v = view
-        self.set_range(0, .1)
+        self.set_range(0, .25)
         assert self.vmin is not None
         assert self.vmax is not None
 
@@ -412,10 +409,11 @@ class EphysController:
         self.set_range(t0, t1)
 
     def on_key_press(self, key, modifiers=()):
+        k = .1
         if key == 'left':
-            self.go_left(.25 * (self.t1 - self.t0))
+            self.go_left(k * (self.t1 - self.t0))
         if key == 'right':
-            self.go_right(.25 * (self.t1 - self.t0))
+            self.go_right(k * (self.t1 - self.t0))
         if key == 'home':
             self.set_range(0, self.t1 - self.t0)
         if key == 'end':
@@ -442,24 +440,25 @@ class EphysController:
 # -------------------------------------------------------------------------------------------------
 
 def get_eid():
-    return 'f25642c6-27a5-4a97-9ea0-06652db79fbd'
+    return 'f25642c6-27a5-4a97-9ea0-06652db79fbd', 'bebe7c8f-0f34-4c3a-8fbb-d2a5119d2961'
+
     one = ONE()
     insertions = one.alyx.rest('insertions', 'list', dataset_type='channels.mlapdv')
     insertion_id = insertions[0]['id']
-    return insertions[0]['session_info']['id']
+    return insertion_id, insertions[0]['session_info']['id']
 
 
 if __name__ == '__main__':
-    eid = get_eid()
+    eid, insertion_id = get_eid()
     m_ephys = EphysModel(eid)
 
     # Create the Datoviz view.
-    c = canvas(width=1600, height=800, show_fps=True)
-    scene = c.scene(rows=1, cols=2)
+    c = canvas(width=1600, height=1200, show_fps=True)
+    scene = c.scene(rows=2, cols=1)
 
     # Panels.
-    p0 = scene.panel(col=0, controller='axes', hide_grid=False)
-    p1 = scene.panel(col=1, controller='axes', hide_grid=True)
+    p0 = scene.panel(row=0, controller='axes', hide_grid=False)
+    p1 = scene.panel(row=1, controller='axes', hide_grid=True)
 
     # Ephys view.
     v_ephys = EphysView(c, p1, n_channels=m_ephys.n_channels)
@@ -470,16 +469,13 @@ if __name__ == '__main__':
         return data - np.median(data, axis=1).reshape((-1, 1))
 
     # Raster view.
-    # m_raster = RasterModel(insertion_id)
-    # v_raster = RasterView(c, p0)
-    # c_raster = RasterController(m_raster, v_raster)
-    # c_raster.set_data()
-    # c_raw.set_range(0, .1)
+    m_raster = RasterModel(insertion_id)
+    v_raster = RasterView(c, p0)
+    c_raster = RasterController(m_raster, v_raster)
 
-    # # Link between the panels.
-    # @c_raster.on_time_select
-    # def on_time_select(t):
-    #     c_raw._update_control()
-    #     c_raw.go_to(t)
+    # Link between the panels.
+    @c_raster.on_time_select
+    def on_time_select(t):
+        c_ephys.go_to(t)
 
     run()
