@@ -85,6 +85,7 @@ def _load_spikes(probe_id):
     sd[np.isnan(sd)] = sd[~np.isnan(sd)].min()
 
     color = colormap(sc.astype(np.double), cmap='glasbey')
+
     # assert 100 < len(cr) < 1000
     # # Brain region colors
     # atlas = AllenAtlas(25)
@@ -95,7 +96,6 @@ def _load_spikes(probe_id):
     # # HACK: spurious values
     # spike_regions[spike_regions > 2000] = 0
     # color = rgb[spike_regions]
-
 
     return st, sa, sc, sd, color
 
@@ -118,10 +118,19 @@ class RasterView:
         self.canvas = canvas
         self.panel = panel
         self.v_point = self.panel.visual('point')
+        self.v_line = self.panel.visual('path')
+        self.v_line.data('pos', np.zeros((2, 3)))
 
     def set_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors, ms=2):
+        self.spike_times = spike_times
+        self.spike_clusters = spike_clusters
+        self.spike_depths = spike_depths
+        self.spike_colors = spike_colors
+
         N = len(spike_times)
         assert spike_times.shape == spike_depths.shape == spike_clusters.shape
+
+        self.cluster_ids = np.unique(spike_clusters)
 
         pos = np.c_[spike_times, spike_depths, np.zeros(N)]
 
@@ -129,8 +138,20 @@ class RasterView:
         self.v_point.data('color', spike_colors)
         self.v_point.data('ms', np.array([ms]))
 
+    def highlight_cluster(self, cl):
+        idx = self.spike_clusters == cl
+        if np.sum(idx) == 0:
+            return
+        i = np.nonzero(idx)[0][0]
+        x = self.spike_times[idx]
+        y = self.spike_depths[idx]
+        p = np.c_[x, y, np.zeros(len(x))]
+        self.v_line.data('pos', p)
+        color = self.spike_colors[i]
+        self.v_line.data('color', color)
+
     def change_marker_size(self, x):
-        assert 1 <= x and x <= 20
+        assert 0 <= x and x <= 30
         self.v_point.data('ms', np.array([x]))
 
 
@@ -148,11 +169,21 @@ class RasterController:
 
         # Slider controlling the marker size.
         self.slider_ms = self.gui.control(
-            'slider_float', 'marker size', vmin=1, vmax=20)
+            'slider_float', 'marker size', vmin=.1, vmax=30)
 
         @self.slider_ms.connect
         def on_ms_change(x):
             self.v.change_marker_size(x)
+
+
+        # Slider controlling the cluster to highlight.
+        self.slider_cluster = self.gui.control(
+            'slider_int', 'cluster', vmin=self.v.cluster_ids.min(), vmax=self.v.cluster_ids.max())
+
+        @self.slider_cluster.connect
+        def on_cluster_change(cl):
+            self.v.highlight_cluster(cl)
+
 
         # Callbacks
         self.scene = self.canvas.scene()
