@@ -127,6 +127,10 @@ class RasterView:
         self.v_point.data('color', spike_colors)
         self.v_point.data('ms', np.array([ms]))
 
+    def change_marker_size(self, x):
+        assert 1 <= x and x <= 20
+        self.v_point.data('ms', np.array([x]))
+
 
 class RasterController:
     _time_select_cb = None
@@ -136,6 +140,17 @@ class RasterController:
         self.v = view
         self.canvas = view.canvas
         self.set_data()
+
+        # GUI
+        self.gui = self.canvas.gui("GUI")
+
+        # Slider controlling the marker size.
+        self.slider_ms = self.gui.control(
+            'slider_float', 'marker size', vmin=1, vmax=20)
+
+        @self.slider_ms.connect
+        def on_ms_change(x):
+            self.v.change_marker_size(x)
 
         # Callbacks
         self.scene = self.canvas.scene()
@@ -319,10 +334,11 @@ class EphysController:
 
         # GUI
         self.gui = self.canvas.gui("GUI")
-        # self.input = self.gui.control('input_float', 'time', step=.1, step_fast=1, mode='async')
-        # self.input.connect(self.on_slider)
+
+        # Slider controlling the imshow value range.
         self.slider = self.gui.control(
             'slider_float2', 'vrange', vmin=self.vmin, vmax=self.vmax)
+
         @self.slider.connect
         def on_vrange(i, j):
             self.set_vrange(i, j)
