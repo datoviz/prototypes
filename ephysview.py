@@ -84,16 +84,18 @@ def _load_spikes(probe_id):
 
     sd[np.isnan(sd)] = sd[~np.isnan(sd)].min()
 
-    assert 100 < len(cr) < 1000
-    # Brain region colors
-    atlas = AllenAtlas(25)
-    n = len(atlas.regions.rgb)
-    alpha = 255 * np.ones((n, 1))
-    rgb = np.hstack((atlas.regions.rgb, alpha)).astype(np.uint8)
-    spike_regions = cr[sc]
-    # HACK: spurious values
-    spike_regions[spike_regions > 2000] = 0
-    color = rgb[spike_regions]
+    color = colormap(sc.astype(np.double), cmap='glasbey')
+    # assert 100 < len(cr) < 1000
+    # # Brain region colors
+    # atlas = AllenAtlas(25)
+    # n = len(atlas.regions.rgb)
+    # alpha = 255 * np.ones((n, 1))
+    # rgb = np.hstack((atlas.regions.rgb, alpha)).astype(np.uint8)
+    # spike_regions = cr[sc]
+    # # HACK: spurious values
+    # spike_regions[spike_regions > 2000] = 0
+    # color = rgb[spike_regions]
+
 
     return st, sa, sc, sd, color
 
