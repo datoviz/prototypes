@@ -16,7 +16,7 @@ from ibllib.atlas import AllenAtlas
 from ibllib.io.spikeglx import download_raw_partial
 from one.api import ONE
 
-from datoviz import canvas, run, colormap, add_default_handler
+from datoviz import canvas, run, colormap, colorpal
 
 
 logger = logging.getLogger('datoviz')
@@ -84,7 +84,7 @@ def _load_spikes(probe_id):
 
     sd[np.isnan(sd)] = sd[~np.isnan(sd)].min()
 
-    color = colormap(sc.astype(np.double), cmap='glasbey')
+    color = colorpal(sc.astype(np.int32), cpal='glasbey')
 
     # assert 100 < len(cr) < 1000
     # # Brain region colors
@@ -358,7 +358,7 @@ class EphysView:
 
 class EphysController:
     _is_fetching = False
-    # _do_update_control = True
+    _time_changed_cb = None
     _cur_filter_idx = 0
     vmin = None
     vmax = None
@@ -515,6 +515,8 @@ class EphysController:
             t1 = d
         assert abs(t1 - t0 - d) < 1e-6
         self.set_range(t0, t1)
+        if self._time_changed_cb:
+            self._time_changed_cb(t0, t1)
 
     def go_right(self, shift):
         d = self.t1 - self.t0
@@ -524,6 +526,8 @@ class EphysController:
             t0 = self.m.duration - shift
             t1 = self.m.duration
         self.set_range(t0, t1)
+        if self._time_changed_cb:
+            self._time_changed_cb(t0, t1)
 
     def go_to(self, t):
         d = self.t1 - self.t0
@@ -546,6 +550,9 @@ class EphysController:
 
     def add_filter(self, f):
         self.filters.append(f)
+
+    def on_time_changed(self, f):
+        self._time_changed_cb = f
 
     # def _update_control(self,):
     #     # Update the input float value.
@@ -600,5 +607,9 @@ if __name__ == '__main__':
     @c_raster.on_time_select
     def on_time_select(t):
         c_ephys.go_to(t)
+
+    @c_ephys.on_time_changed
+    def on_time_changed(t0, t1):
+        v_raster.set_vert(t0, t1)
 
     run()
