@@ -118,13 +118,21 @@ class RasterView:
         self.canvas = canvas
         self.panel = panel
         self.v_point = self.panel.visual('point')
+
+        # Cluster line.
         self.v_line = self.panel.visual('path')
         self.v_line.data('pos', np.zeros((2, 3)))
+
+        # Vertical lines.
+        self.v_vert = self.panel.visual('path')
+        self.v_vert.data('length', np.array([2, 2]))
 
     def set_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors, ms=2):
         self.spike_times = spike_times
         self.spike_clusters = spike_clusters
         self.spike_depths = spike_depths
+        self.ymin = spike_depths.min()
+        self.ymax = spike_depths.max()
         self.spike_colors = spike_colors
 
         N = len(spike_times)
@@ -138,6 +146,8 @@ class RasterView:
         self.v_point.data('color', spike_colors)
         self.v_point.data('ms', np.array([ms]))
 
+        self.set_vert(0, 0.1)
+
     def highlight_cluster(self, cl):
         idx = self.spike_clusters == cl
         if np.sum(idx) == 0:
@@ -149,6 +159,12 @@ class RasterView:
         self.v_line.data('pos', p)
         color = self.spike_colors[i]
         self.v_line.data('color', color)
+
+    def set_vert(self, x0, x1):
+        self.v_vert.data('pos', np.array([
+            [x0, self.ymin, 0], [x0, self.ymax, 0],
+            [x1, self.ymin, 0], [x1, self.ymax, 0],
+        ]))
 
     def change_marker_size(self, x):
         assert 0 <= x and x <= 30
@@ -200,6 +216,7 @@ class RasterController:
             return
         xd, yd = p.pick(x, y)
         if self._time_select_cb is not None:
+            self.v.set_vert(xd - .05, xd + .05)
             self._time_select_cb(xd)
 
     def on_time_select(self, f):
