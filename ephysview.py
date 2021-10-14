@@ -209,14 +209,33 @@ class Model:
         out[:, -1] = out[:, -2]
         return out
 
-    def get_cluster_spikes(self, cl):
-        idx = self.d.spike_clusters == cl
+    def spikes_in_range(self, t0, t1):
+        imin = np.searchsorted(self.d.spike_times, t0)
+        imax = np.searchsorted(self.d.spike_times, t1)
+        return imin, imax
+
+    def get_cluster_spikes(self, cl, t0_t1=None):
+        # Select spikes in the given time range, or all spikes.
+        if t0_t1 is not None:
+            i0, i1 = self.spikes_in_range(*t0_t1)
+            s = slice(i0, i1, 1)
+        else:
+            s = slice(None, None, None)
+
+        # Select the spikes from the requested cluster within the time range.
+        sc = self.d.spike_clusters[s]
+        idx = sc == cl
         if np.sum(idx) == 0:
             return
+
+        # x and y coordinates of the spikes.
+        x = self.d.spike_times[s][idx]
+        y = self.d.spike_depths[s][idx]
+
+        # Color of the first spike.
         i = np.nonzero(idx)[0][0]
-        x = self.d.spike_times[idx]
-        y = self.d.spike_depths[idx]
-        color = self.d.spike_colors[i]
+        color = self.d.spike_colors[s][i]
+
         return x, y, color
 
 
@@ -293,6 +312,10 @@ class EphysView:
         self.set_xrange(0, 1)
         self._set_tex_coords(1)
 
+        # Cluster line.
+        self.v_line = self.panel.visual('path')
+        self.v_line.data('pos', np.zeros((2, 3)))
+
     def _set_tex_coords(self, x=1):
         # Top left, top right, bottom right, bottom left
         self.v_image.data('texcoords', np.atleast_2d([0, 0]), idx=0)
@@ -320,6 +343,11 @@ class EphysView:
         assert self._arr.dtype == img.dtype
         self._arr[:] = img[:]
         self.tex.upload(self._arr)
+
+    def show_line(self, x, y, color):
+        p = np.c_[x, y, np.zeros(len(x))]
+        self.v_line.data('pos', p)
+        self.v_line.data('color', color)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -567,7 +595,7 @@ class GUI:
         self._gui = self.c.gui("GUI")
         self._make_slider_ms(ctrl.rv)
         self._make_slider_cluster(
-            ctrl.rv, ctrl.m.d.spike_clusters.min(), ctrl.m.d.spike_clusters.max())
+            ctrl.rv, ctrl.ev, ctrl.m.d.spike_clusters.min(), ctrl.m.d.spike_clusters.max())
         self._make_slider_range(ctrl.vmin, ctrl.vmax)
         self._make_button_filter(ctrl)
 
@@ -580,15 +608,22 @@ class GUI:
         def on_ms_change(x):
             raster_view.change_marker_size(x)
 
-    def _make_slider_cluster(self, raster_view, cmin, cmax):
+    def _make_slider_cluster(self, raster_view, ephys_view, cmin, cmax):
         # Slider controlling the cluster to highlight.
         self._slider_cluster = self._gui.control(
             'slider_int', 'cluster', vmin=cmin, vmax=cmax)
 
         @self._slider_cluster.connect
         def on_cluster_change(cl):
+            # Cluster line in raster view.
             x, y, color = self.m.get_cluster_spikes(cl)
             raster_view.show_line(x, y, color)
+
+            # Cluster line in ephys view.
+            t0, t1 = self.ctrl.t0, self.ctrl.t1
+            e = self.m.get_cluster_spikes(cl, (t0, t1))
+            if e:
+                ephys_view.show_line(*e)
 
     def _make_slider_range(self, vmin, vmax):
         # Slider controlling the imshow value range.
