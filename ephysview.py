@@ -291,9 +291,11 @@ class RasterView:
 
 
 class EphysView:
-    def __init__(self, canvas, panel, n_channels):
+    def __init__(self, canvas, panel, n_channels, dmin, dmax):
         self.canvas = canvas
         self.panel = panel
+        self.dmin = dmin
+        self.dmax = dmax
 
         assert n_channels > 0
         self.n_channels = n_channels
@@ -325,10 +327,10 @@ class EphysView:
 
     def set_xrange(self, t0, t1):
         # Top left, top right, bottom right, bottom left
-        self.v_image.data('pos', np.array([[t0, 0, 0]]), idx=0)
-        self.v_image.data('pos', np.array([[t1, 0, 0]]), idx=1)
-        self.v_image.data('pos', np.array([[t1, self.n_channels, 0]]), idx=2)
-        self.v_image.data('pos', np.array([[t0, self.n_channels, 0]]), idx=3)
+        self.v_image.data('pos', np.array([[t0, self.dmin, 0]]), idx=0)
+        self.v_image.data('pos', np.array([[t1, self.dmin, 0]]), idx=1)
+        self.v_image.data('pos', np.array([[t1, self.dmax, 0]]), idx=2)
+        self.v_image.data('pos', np.array([[t0, self.dmax, 0]]), idx=3)
 
     def set_image(self, img):
         assert img.ndim == 3
@@ -671,7 +673,7 @@ if __name__ == '__main__':
 
     # Views.
     rv = RasterView(c, p0)
-    ev = EphysView(c, p1, n_channels=m.n_channels)
+    ev = EphysView(c, p1, m.n_channels, m.depth_min, m.depth_max)
 
     # Controller
     ctrl = Controller(m, rv, ev)
