@@ -78,7 +78,8 @@ def _load_spikes(probe_id):
         'spikes.times', 'spikes.amps', 'spikes.clusters', 'spikes.depths',
         'clusters.brainLocationIds_ccf_2017']
     dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id)
-    dsets_int = [[d for d in dsets if d['dataset_type'] in _][0] for _ in dtypes]
+    dsets_int = [[d for d in dsets if d['dataset_type'] in _][0]
+                 for _ in dtypes]
     st, sa, sc, sd, cr = (
         np.load(_) for _ in one._download_datasets(dsets_int) if str(_).endswith('.npy'))
 
@@ -106,7 +107,8 @@ def _load_spikes(probe_id):
 
 class RasterModel:
     def __init__(self, probe_id):
-        self.st, self.sa, self.sc, self.sd, self.spike_colors = _load_spikes(probe_id)
+        self.st, self.sa, self.sc, self.sd, self.spike_colors = _load_spikes(
+            probe_id)
         self.depth_min = self.sd.min()
         self.depth_max = self.sd.max()
         assert self.depth_min < self.depth_max
@@ -120,7 +122,7 @@ class RasterView:
         self.v_point = self.panel.visual('point')
 
         # Cluster line.
-        self.v_line = self.panel.visual('path')
+        self.v_line = self.panel.visual('line_strip')
         self.v_line.data('pos', np.zeros((2, 3)))
 
         # Vertical lines.
@@ -148,16 +150,9 @@ class RasterView:
 
         self.set_vert(0, 0.1)
 
-    def highlight_cluster(self, cl):
-        idx = self.spike_clusters == cl
-        if np.sum(idx) == 0:
-            return
-        i = np.nonzero(idx)[0][0]
-        x = self.spike_times[idx]
-        y = self.spike_depths[idx]
+    def show_line(self, x, y, color):
         p = np.c_[x, y, np.zeros(len(x))]
         self.v_line.data('pos', p)
-        color = self.spike_colors[i]
         self.v_line.data('color', color)
 
     def set_vert(self, x0, x1):
@@ -191,15 +186,20 @@ class RasterController:
         def on_ms_change(x):
             self.v.change_marker_size(x)
 
-
         # Slider controlling the cluster to highlight.
         self.slider_cluster = self.gui.control(
             'slider_int', 'cluster', vmin=self.v.cluster_ids.min(), vmax=self.v.cluster_ids.max())
 
         @self.slider_cluster.connect
         def on_cluster_change(cl):
-            self.v.highlight_cluster(cl)
-
+            idx = self.m.sc == cl
+            if np.sum(idx) == 0:
+                return
+            i = np.nonzero(idx)[0][0]
+            x = self.m.st[idx]
+            y = self.m.sd[idx]
+            color = self.m.spike_colors[i]
+            self.v.show_line(x, y, color)
 
         # Callbacks
         self.scene = self.canvas.scene()
@@ -235,7 +235,8 @@ class EphysModel:
 
         self._download_chunk = memory.cache(self._download_chunk)
 
-        logger.info(f"Downloading first chunk of ephys data {eid}, probe #{probe_idx}")
+        logger.info(
+            f"Downloading first chunk of ephys data {eid}, probe #{probe_idx}")
         info, arr = self._download_chunk(eid, probe_idx=probe_idx, chunk_idx=0)
         assert info
         assert arr.size
@@ -258,8 +259,10 @@ class EphysModel:
     # return tuple (info, array)
     def _download_chunk(self, eid, probe_idx=0, chunk_idx=0):
         one = ONE()
-        url_cbin, url_ch, url_meta = get_data_urls(eid, probe_idx=probe_idx, one=one)
-        reader = download_raw_partial(url_cbin, url_ch, url_meta, chunk_idx, chunk_idx)
+        url_cbin, url_ch, url_meta = get_data_urls(
+            eid, probe_idx=probe_idx, one=one)
+        reader = download_raw_partial(
+            url_cbin, url_ch, url_meta, chunk_idx, chunk_idx)
         return reader._raw.cmeta, reader[:]
 
     def get_chunk(self, chunk_idx):
@@ -318,7 +321,8 @@ class EphysView:
         self.tex = canvas.gpu().context().texture(
             self.n_samples_tex, n_channels, dtype=np.dtype(np.uint8), ndim=2, ncomp=4)
         # Placeholder for the data so as to keep the data to upload in memory.
-        self._arr = np.empty((self.n_samples_tex, n_channels, 4), dtype=np.uint8)
+        self._arr = np.empty(
+            (self.n_samples_tex, n_channels, 4), dtype=np.uint8)
 
         # Image visual
         self.v_image = self.panel.visual('image')
@@ -398,13 +402,15 @@ class EphysController:
         it1 = np.clip(it1, 0, self.m.n_samples - 1)
         ic0 = np.clip(ic0, 0, self.m.n_channels - 1)
         ic1 = np.clip(ic1, 0, self.m.n_channels - 1)
-        img[it0:it1, ic0:ic1, :3] = (img[it0:it1, ic0:ic1, :3] * color).astype(img.dtype)
+        img[it0:it1, ic0:ic1, :3] = (
+            img[it0:it1, ic0:ic1, :3] * color).astype(img.dtype)
         return img
 
     def highlight_spike(self, img, t, depth, color):
 
         if t < self.t0 or t > self.t1:
-            logger.debug("Spike to be highlighted is beyond the bounds of the current data area")
+            logger.debug(
+                "Spike to be highlighted is beyond the bounds of the current data area")
             return
 
         assert self.raster_model, "The raster model must be passed to the EphysController constructor"
@@ -433,7 +439,8 @@ class EphysController:
         self.vmax = data.max() if self.vmax is None else self.vmax
 
         # Colormap
-        img = colormap(data.ravel().astype(np.double), vmin=self.vmin, vmax=self.vmax, cmap='gray')
+        img = colormap(data.ravel().astype(np.double),
+                       vmin=self.vmin, vmax=self.vmax, cmap='gray')
         img = img.reshape(data.shape + (-1,))
         assert img.shape == data.shape[:2] + (4,)
 
@@ -544,7 +551,8 @@ class EphysController:
         if key == 'home':
             self.set_range(0, self.t1 - self.t0)
         if key == 'end':
-            self.set_range(self.m.duration - (self.t1 - self.t0), self.m.duration)
+            self.set_range(self.m.duration -
+                           (self.t1 - self.t0), self.m.duration)
         if key == 'f':
             self.next_filter()
 
@@ -573,7 +581,8 @@ def get_eid():
     return 'f25642c6-27a5-4a97-9ea0-06652db79fbd', 'bebe7c8f-0f34-4c3a-8fbb-d2a5119d2961'
 
     one = ONE()
-    insertions = one.alyx.rest('insertions', 'list', dataset_type='channels.mlapdv')
+    insertions = one.alyx.rest(
+        'insertions', 'list', dataset_type='channels.mlapdv')
     insertion_id = insertions[0]['id']
     return insertion_id, insertions[0]['session_info']['id']
 
