@@ -67,6 +67,24 @@ def get_data_urls(eid, probe_idx=0, one=None):
     return url_cbin, url_ch, url_meta
 
 
+# -------------------------------------------------------------------------------------------------
+# Model
+# -------------------------------------------------------------------------------------------------
+
+class Bunch(dict):
+    def __init__(self, *args, **kwargs):
+        super(Bunch, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+
+class SpikeData(Bunch):
+    def __init__(self, spike_times, spike_clusters, spike_depths, spike_colors):
+        self.spike_times = spike_times
+        self.spike_clusters = spike_clusters
+        self.spike_depths = spike_depths
+        self.spike_colors = spike_colors
+
+
 location = Path('~/.one_cache/').expanduser()
 memory = Memory(location, verbose=0)
 
@@ -98,143 +116,19 @@ def _load_spikes(probe_id):
     # spike_regions[spike_regions > 2000] = 0
     # color = rgb[spike_regions]
 
-    return st, sa, sc, sd, color
+    return SpikeData(st, sc, sd, color)
 
 
-# -------------------------------------------------------------------------------------------------
-# Raster viewer
-# -------------------------------------------------------------------------------------------------
-
-class RasterModel:
-    def __init__(self, probe_id):
-        self.st, self.sa, self.sc, self.sd, self.spike_colors = _load_spikes(
-            probe_id)
-        self.depth_min = self.sd.min()
-        self.depth_max = self.sd.max()
-        assert self.depth_min < self.depth_max
-        logger.info(f"Loaded {len(self.st)} spikes")
-
-
-class RasterView:
-    def __init__(self, canvas, panel):
-        self.canvas = canvas
-        self.panel = panel
-        self.v_point = self.panel.visual('point')
-
-        # Cluster line.
-        self.v_line = self.panel.visual('line_strip')
-        self.v_line.data('pos', np.zeros((2, 3)))
-
-        # Vertical lines.
-        self.v_vert = self.panel.visual('path')
-        self.v_vert.data('length', np.array([2, 2]))
-
-    def set_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors, ms=2):
-        self.spike_times = spike_times
-        self.spike_clusters = spike_clusters
-        self.spike_depths = spike_depths
-        self.ymin = spike_depths.min()
-        self.ymax = spike_depths.max()
-        self.spike_colors = spike_colors
-
-        N = len(spike_times)
-        assert spike_times.shape == spike_depths.shape == spike_clusters.shape
-
-        self.cluster_ids = np.unique(spike_clusters)
-
-        pos = np.c_[spike_times, spike_depths, np.zeros(N)]
-
-        self.v_point.data('pos', pos)
-        self.v_point.data('color', spike_colors)
-        self.v_point.data('ms', np.array([ms]))
-
-        self.set_vert(0, 0.1)
-
-    def show_line(self, x, y, color):
-        p = np.c_[x, y, np.zeros(len(x))]
-        self.v_line.data('pos', p)
-        self.v_line.data('color', color)
-
-    def set_vert(self, x0, x1):
-        self.v_vert.data('pos', np.array([
-            [x0, self.ymin, 0], [x0, self.ymax, 0],
-            [x1, self.ymin, 0], [x1, self.ymax, 0],
-        ]))
-
-    def change_marker_size(self, x):
-        assert 0 <= x and x <= 30
-        self.v_point.data('ms', np.array([x]))
-
-
-class RasterController:
-    _time_select_cb = None
-
-    def __init__(self, model, view):
-        self.m = model
-        self.v = view
-        self.canvas = view.canvas
-        self.set_data()
-
-        # GUI
-        self.gui = self.canvas.gui("GUI")
-
-        # Slider controlling the marker size.
-        self.slider_ms = self.gui.control(
-            'slider_float', 'marker size', vmin=.1, vmax=30)
-
-        @self.slider_ms.connect
-        def on_ms_change(x):
-            self.v.change_marker_size(x)
-
-        # Slider controlling the cluster to highlight.
-        self.slider_cluster = self.gui.control(
-            'slider_int', 'cluster', vmin=self.v.cluster_ids.min(), vmax=self.v.cluster_ids.max())
-
-        @self.slider_cluster.connect
-        def on_cluster_change(cl):
-            idx = self.m.sc == cl
-            if np.sum(idx) == 0:
-                return
-            i = np.nonzero(idx)[0][0]
-            x = self.m.st[idx]
-            y = self.m.sd[idx]
-            color = self.m.spike_colors[i]
-            self.v.show_line(x, y, color)
-
-        # Callbacks
-        self.scene = self.canvas.scene()
-        self.canvas.connect(self.on_mouse_click)
-
-    def set_data(self):
-        self.v.set_spikes(self.m.st, self.m.sc, self.m.sd, self.m.spike_colors)
-
-    def on_mouse_click(self, x, y, button=None, modifiers=()):
-        if not modifiers:
-            return
-        p = self.scene.panel_at(x, y)
-        if p != self.v.panel:
-            return
-        xd, yd = p.pick(x, y)
-        if self._time_select_cb is not None:
-            self.v.set_vert(xd - .05, xd + .05)
-            self._time_select_cb(xd)
-
-    def on_time_select(self, f):
-        self._time_select_cb = f
-
-
-# -------------------------------------------------------------------------------------------------
-# Raw data viewer
-# -------------------------------------------------------------------------------------------------
-
-class EphysModel:
-    def __init__(self, eid, probe_idx=0, one=None):
+class Model:
+    def __init__(self, eid, probe_id, probe_idx=0, one=None):
         self.eid = eid
+        self.probe_id = probe_id
         self.probe_idx = probe_idx
         self.one = one
 
         self._download_chunk = memory.cache(self._download_chunk)
 
+        # Ephys data
         logger.info(
             f"Downloading first chunk of ephys data {eid}, probe #{probe_idx}")
         info, arr = self._download_chunk(eid, probe_idx=probe_idx, chunk_idx=0)
@@ -255,6 +149,13 @@ class EphysModel:
         logger.info(
             f"Downloaded first chunk of ephys data "
             f"{self.n_samples=}, {self.n_channels=}, {self.duration=}")
+
+        # Spike data.
+        self.d = _load_spikes(probe_id)
+        self.depth_min = self.d.spike_depths.min()
+        self.depth_max = self.d.spike_depths.max()
+        assert self.depth_min < self.depth_max
+        logger.info(f"Loaded {len(self.d.spike_times)} spikes")
 
     # return tuple (info, array)
     def _download_chunk(self, eid, probe_idx=0, chunk_idx=0):
@@ -309,6 +210,61 @@ class EphysModel:
         return out
 
 
+# -------------------------------------------------------------------------------------------------
+# Views
+# -------------------------------------------------------------------------------------------------
+
+class RasterView:
+    def __init__(self, canvas, panel):
+        self.canvas = canvas
+        self.panel = panel
+        self.v_point = self.panel.visual('point')
+
+        # Cluster line.
+        self.v_line = self.panel.visual('line_strip')
+        self.v_line.data('pos', np.zeros((2, 3)))
+
+        # Vertical lines.
+        self.v_vert = self.panel.visual('path')
+        self.v_vert.data('length', np.array([2, 2]))
+
+    def show_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors, ms=2):
+        # self.spike_times = spike_times
+        # self.spike_clusters = spike_clusters
+        # self.spike_depths = spike_depths
+        # self.spike_colors = spike_colors
+        self.ymin = spike_depths.min()
+        self.ymax = spike_depths.max()
+
+        N = len(spike_times)
+        assert spike_times.shape == spike_depths.shape == spike_clusters.shape
+
+        self.cluster_ids = np.unique(spike_clusters)
+
+        pos = np.c_[spike_times, spike_depths, np.zeros(N)]
+
+        self.v_point.data('pos', pos)
+        self.v_point.data('color', spike_colors)
+        self.v_point.data('ms', np.array([ms]))
+
+        self.set_vert(0, 0.1)
+
+    def show_line(self, x, y, color):
+        p = np.c_[x, y, np.zeros(len(x))]
+        self.v_line.data('pos', p)
+        self.v_line.data('color', color)
+
+    def set_vert(self, x0, x1):
+        self.v_vert.data('pos', np.array([
+            [x0, self.ymin, 0], [x0, self.ymax, 0],
+            [x1, self.ymin, 0], [x1, self.ymax, 0],
+        ]))
+
+    def change_marker_size(self, x):
+        assert 0 <= x and x <= 30
+        self.v_point.data('ms', np.array([x]))
+
+
 class EphysView:
     def __init__(self, canvas, panel, n_channels):
         self.canvas = canvas
@@ -360,7 +316,12 @@ class EphysView:
         self.tex.upload(self._arr)
 
 
-class EphysController:
+# -------------------------------------------------------------------------------------------------
+# Controller
+# -------------------------------------------------------------------------------------------------
+
+class Controller:
+    _time_select_cb = None
     _is_fetching = False
     _time_changed_cb = None
     _cur_filter_idx = 0
@@ -372,30 +333,54 @@ class EphysController:
     t0 = 0
     t1 = 1
 
-    def __init__(self, model, view, raster_model=None):
-        self.filters = [None]
+    def __init__(self, model, raster_view, ephys_view):
+        assert model
+        assert raster_view
+        assert ephys_view
+        assert model.n_channels > 0
+        assert model.depth_min < model.depth_max
+
+        self.canvas = raster_view.canvas
         self.m = model
-        assert raster_model
-        self.raster_model = raster_model
-        self.v = view
+        self.rv = raster_view
+        self.ev = ephys_view
+
+        # Raster.
+        self.show_spikes()
+
+        # Raw data filters.
+        self.filters = [None]
+
+        # Raw data.
         self.set_range(0, .1)
         assert self.vmin is not None
         assert self.vmax is not None
 
         # Callbacks
-        self.canvas = view.canvas
+        self.scene = self.canvas.scene()
+        self.canvas.connect(self.on_mouse_click)
         self.canvas.connect(self.on_key_press)
 
-        # GUI
-        self.gui = self.canvas.gui("GUI")
+        # TODO
+        # @c_ephys.add_filter
+        # def my_filter(data):
+        #     return data - np.median(data, axis=1).reshape((-1, 1))
 
-        # Slider controlling the imshow value range.
-        self.slider = self.gui.control(
-            'slider_float2', 'vrange', vmin=self.vmin, vmax=self.vmax)
+        # # Link between the panels.
+        # @c_raster.on_time_select
+        # def on_time_select(t):
+        #     c_ephys.go_to(t)
 
-        @self.slider.connect
-        def on_vrange(i, j):
-            self.set_vrange(i, j)
+        # @c_ephys.on_time_changed
+        # def on_time_changed(t0, t1):
+        #     v_raster.set_vert(t0, t1)
+
+    def show_spikes(self):
+        self.rv.show_spikes(
+            self.m.d.spike_times,
+            self.m.d.spike_clusters,
+            self.m.d.spike_depths,
+            self.m.d.spike_colors)
 
     def highlight_area(self, img, it0, it1, ic0, ic1, color):
         it0 = np.clip(it0, 0, self.m.n_samples - 1)
@@ -407,24 +392,19 @@ class EphysController:
         return img
 
     def highlight_spike(self, img, t, depth, color):
-
         if t < self.t0 or t > self.t1:
             logger.debug(
                 "Spike to be highlighted is beyond the bounds of the current data area")
             return
 
-        assert self.raster_model, "The raster model must be passed to the EphysController constructor"
-        assert self.m.n_channels > 0
-        assert self.raster_model.depth_min < self.raster_model.depth_max
-
-        dm, dM = self.raster_model.depth_min, self.raster_model.depth_max
+        dm, dM = self.m.depth_min, self.m.depth_max
         x = (depth - dm) / (dM - dm)
         assert 0 <= x <= 1
         ic = int(round(x * (self.m.n_channels - 1)))
 
         t = (t - self.t0) / float(self.t1 - self.t0)
         assert 0 <= t <= 1
-        it = int(round(t * (self.v.n_samples_tex - 1)))
+        it = int(round(t * (self.ev.n_samples_tex - 1)))
 
         nc = 5
         nt = 15
@@ -468,50 +448,47 @@ class EphysController:
         #     self._update_control()
 
         # Update the positions.
-        self.v.set_xrange(t0, t1)
+        self.ev.set_xrange(t0, t1)
 
         # Filter.
         self.data = self.m.get_data(t0, t1)
-        self.data_f = self.filter(self.data)
+        self.data_f = self.apply_filter(self.data)
 
         # Apply colormap.
         img = self.to_image(self.data_f)
 
         # Highlight the spikes.
-        imin = np.searchsorted(self.raster_model.st, self.t0)
-        imax = np.searchsorted(self.raster_model.st, self.t1)
+        st = self.m.d.spike_times
+        sd = self.m.d.spike_depths
+
+        imin = np.searchsorted(st, self.t0)
+        imax = np.searchsorted(st, self.t1)
         for i in range(imin, imax):
-            t = self.raster_model.st[i]
-            d = self.raster_model.sd[i]
-            color = self.raster_model.spike_colors[i]
+            t = st[i]
+            d = sd[i]
+            color = self.m.d.spike_colors[i]
             color = color[:3] / 255.0
             img = self.highlight_spike(img, t, d, color)
 
         # Update the image.
         self.img = img
-        self.v.set_image(self.img)
+        self.ev.set_image(self.img)
+
+    def update_ephys_view(self):
+        self.set_range(self.t0, self.t1)
 
     def set_vrange(self, vmin, vmax):
         self.vmin = vmin
         self.vmax = vmax
-        self.update()
+        self.update_ephys_view()
 
-    def update(self):
-        self.set_range(self.t0, self.t1)
+    # Time navigation
+    # ---------------------------------------------------------------------------------------------
 
-    def filter(self, arr):
-        f = self.filters[self._cur_filter_idx % len(self.filters)]
-        logger.info(f"Apply filter {(f.__name__ if f else 'default')}")
-        if not f:
-            return arr
-        arr_f = f(arr)
-        assert arr_f.dtype == arr.dtype
-        assert arr_f.shape == arr.shape
-        return arr_f
-
-    def next_filter(self):
-        self._cur_filter_idx = (self._cur_filter_idx + 1) % len(self.filters)
-        self.update()
+    def _update_time(self, t0, t1):
+        self.set_range(t0, t1)
+        if self._time_changed_cb:
+            self._time_changed_cb(t0, t1)
 
     def go_left(self, shift):
         d = self.t1 - self.t0
@@ -521,26 +498,54 @@ class EphysController:
             t0 = 0
             t1 = d
         assert abs(t1 - t0 - d) < 1e-6
-        self.set_range(t0, t1)
-        if self._time_changed_cb:
-            self._time_changed_cb(t0, t1)
+        self._update_time(t0, t1)
 
     def go_right(self, shift):
-        d = self.t1 - self.t0
         t0 = self.t0 + shift
         t1 = self.t1 + shift
         if t1 > self.m.duration:
             t0 = self.m.duration - shift
             t1 = self.m.duration
-        self.set_range(t0, t1)
-        if self._time_changed_cb:
-            self._time_changed_cb(t0, t1)
+        self._update_time(t0, t1)
 
     def go_to(self, t):
         d = self.t1 - self.t0
         t0 = t - d / 2
         t1 = t + d / 2
         self.set_range(t0, t1)
+
+    # Filters
+    # ---------------------------------------------------------------------------------------------
+
+    def add_filter(self, f):
+        self.filters.append(f)
+
+    def next_filter(self):
+        self._cur_filter_idx = (self._cur_filter_idx + 1) % len(self.filters)
+        self.update_ephys_view()
+
+    def apply_filter(self, arr):
+        f = self.filters[self._cur_filter_idx % len(self.filters)]
+        logger.info(f"Apply filter {(f.__name__ if f else 'default')}")
+        if not f:
+            return arr
+        arr_f = f(arr)
+        assert arr_f.dtype == arr.dtype
+        assert arr_f.shape == arr.shape
+        return arr_f
+
+    # Event callbacks
+    # ---------------------------------------------------------------------------------------------
+
+    def on_mouse_click(self, x, y, button=None, modifiers=()):
+        if not modifiers:
+            return
+        p = self.scene.panel_at(x, y)
+        if p == self.rv.panel:
+            xd, yd = p.pick(x, y)
+            self.ev.set_vert(xd - .05, xd + .05)
+            if self._time_select_cb:
+                self._time_select_cb(xd)
 
     def on_key_press(self, key, modifiers=()):
         k = .1
@@ -556,8 +561,8 @@ class EphysController:
         if key == 'f':
             self.next_filter()
 
-    def add_filter(self, f):
-        self.filters.append(f)
+    def on_time_select(self, f):
+        self._time_select_cb = f
 
     def on_time_changed(self, f):
         self._time_changed_cb = f
@@ -574,22 +579,69 @@ class EphysController:
 
 
 # -------------------------------------------------------------------------------------------------
+# GUI
+# -------------------------------------------------------------------------------------------------
+
+# TODO
+# class GUI:
+#     def __init__(self, c):
+#         self.c = c
+#         self._gui = self.c.gui("GUI")
+#         self._make_slider_ms()
+
+#     def _make_slider_ms(self, raster_view):
+#         # Slider controlling the marker size.
+#         self._slider_ms = self._gui.control(
+#             'slider_float', 'marker size', vmin=.1, vmax=30)
+
+#         @self._slider_ms.connect
+#         def on_ms_change(x):
+#             raster_view.change_marker_size(x)
+
+#     def _make_slider_cluster(self, raster_view, vmin, vmax, spike_times, spike_clusters, spike_depths, spike_colors):
+#         # Slider controlling the cluster to highlight.
+#         self._slider_cluster = self._gui.control(
+#             'slider_int', 'cluster', vmin=vmin, vmax=vmax)
+
+#         @self._slider_cluster.connect
+#         def on_cluster_change(cl):
+#             idx = spike_clusters == cl
+#             if np.sum(idx) == 0:
+#                 return
+#             i = np.nonzero(idx)[0][0]
+#             x = spike_times[idx]
+#             y = spike_depths[idx]
+#             color = spike_colors[i]
+#             raster_view.show_line(x, y, color)
+
+#     def _make_slider_range(self, raster_view):
+#         # Slider controlling the imshow value range.
+#         self.slider = self.gui.control(
+#             'slider_float2', 'vrange', vmin=self.vmin, vmax=self.vmax)
+
+#         @self.slider.connect
+#         def on_vrange(i, j):
+#             self.set_vrange(i, j)
+
+
+# -------------------------------------------------------------------------------------------------
 # Entry point
 # -------------------------------------------------------------------------------------------------
 
-def get_eid():
+def get_eid(probe_idx=0):
     return 'f25642c6-27a5-4a97-9ea0-06652db79fbd', 'bebe7c8f-0f34-4c3a-8fbb-d2a5119d2961'
 
     one = ONE()
     insertions = one.alyx.rest(
         'insertions', 'list', dataset_type='channels.mlapdv')
-    insertion_id = insertions[0]['id']
-    return insertion_id, insertions[0]['session_info']['id']
+    insertion_id = insertions[probe_idx]['id']
+    return insertion_id, insertions[probe_idx]['session_info']['id']
 
 
 if __name__ == '__main__':
-    eid, insertion_id = get_eid()
-    m_ephys = EphysModel(eid)
+    probe_idx = 0
+    eid, probe_id = get_eid(probe_idx)
+    m = Model(eid, probe_id, probe_idx=0)
 
     # Create the Datoviz view.
     c = canvas(width=1600, height=1200, show_fps=True)
@@ -599,26 +651,11 @@ if __name__ == '__main__':
     p0 = scene.panel(row=0, controller='axes', hide_grid=False)
     p1 = scene.panel(row=1, controller='axes', hide_grid=True)
 
-    # Raster view.
-    m_raster = RasterModel(insertion_id)
-    v_raster = RasterView(c, p0)
-    c_raster = RasterController(m_raster, v_raster)
+    # Views.
+    rv = RasterView(c, p0)
+    ev = EphysView(c, p1, n_channels=m.n_channels)
 
-    # Ephys view.
-    v_ephys = EphysView(c, p1, n_channels=m_ephys.n_channels)
-    c_ephys = EphysController(m_ephys, v_ephys, raster_model=m_raster)
-
-    @c_ephys.add_filter
-    def my_filter(data):
-        return data - np.median(data, axis=1).reshape((-1, 1))
-
-    # Link between the panels.
-    @c_raster.on_time_select
-    def on_time_select(t):
-        c_ephys.go_to(t)
-
-    @c_ephys.on_time_changed
-    def on_time_changed(t0, t1):
-        v_raster.set_vert(t0, t1)
+    # Controller
+    ctl = Controller(m, rv, ev)
 
     run()
