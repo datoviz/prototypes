@@ -209,6 +209,16 @@ class Model:
         out[:, -1] = out[:, -2]
         return out
 
+    def get_cluster_spikes(self, cl):
+        idx = self.d.spike_clusters == cl
+        if np.sum(idx) == 0:
+            return
+        i = np.nonzero(idx)[0][0]
+        x = self.d.spike_times[idx]
+        y = self.d.spike_depths[idx]
+        color = self.d.spike_colors[i]
+        return x, y, color
+
 
 # -------------------------------------------------------------------------------------------------
 # Views
@@ -229,10 +239,6 @@ class RasterView:
         self.v_vert.data('length', np.array([2, 2]))
 
     def show_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors, ms=2):
-        # self.spike_times = spike_times
-        # self.spike_clusters = spike_clusters
-        # self.spike_depths = spike_depths
-        # self.spike_colors = spike_colors
         self.ymin = spike_depths.min()
         self.ymax = spike_depths.max()
 
@@ -321,9 +327,7 @@ class EphysView:
 # -------------------------------------------------------------------------------------------------
 
 class Controller:
-    _time_select_cb = None
     _is_fetching = False
-    _time_changed_cb = None
     _cur_filter_idx = 0
     vmin = None
     vmax = None
@@ -361,19 +365,9 @@ class Controller:
         self.canvas.connect(self.on_mouse_click)
         self.canvas.connect(self.on_key_press)
 
-        # TODO
-        # @c_ephys.add_filter
-        # def my_filter(data):
-        #     return data - np.median(data, axis=1).reshape((-1, 1))
-
-        # # Link between the panels.
-        # @c_raster.on_time_select
-        # def on_time_select(t):
-        #     c_ephys.go_to(t)
-
-        # @c_ephys.on_time_changed
-        # def on_time_changed(t0, t1):
-        #     v_raster.set_vert(t0, t1)
+        @self.add_filter
+        def my_filter(data):
+            return data - np.median(data, axis=1).reshape((-1, 1))
 
     def show_spikes(self):
         self.rv.show_spikes(
@@ -487,8 +481,7 @@ class Controller:
 
     def _update_time(self, t0, t1):
         self.set_range(t0, t1)
-        if self._time_changed_cb:
-            self._time_changed_cb(t0, t1)
+        self.rv.set_vert(t0, t1)
 
     def go_left(self, shift):
         d = self.t1 - self.t0
@@ -543,9 +536,8 @@ class Controller:
         p = self.scene.panel_at(x, y)
         if p == self.rv.panel:
             xd, yd = p.pick(x, y)
-            self.ev.set_vert(xd - .05, xd + .05)
-            if self._time_select_cb:
-                self._time_select_cb(xd)
+            self.rv.set_vert(xd - .05, xd + .05)
+            self.go_to(xd)
 
     def on_key_press(self, key, modifiers=()):
         k = .1
@@ -561,67 +553,58 @@ class Controller:
         if key == 'f':
             self.next_filter()
 
-    def on_time_select(self, f):
-        self._time_select_cb = f
-
-    def on_time_changed(self, f):
-        self._time_changed_cb = f
-
-    # def _update_control(self,):
-    #     # Update the input float value.
-    #     self.input.set(float((self.t0 + self.t1) / 2))
-
-    # def on_slider(self, value):
-    #     # HACK: do not update the control programmatically when it's being used with the slider.
-    #     self._do_update_control = False
-    #     self.go_to(value)
-    #     self._do_update_control = True
-
 
 # -------------------------------------------------------------------------------------------------
 # GUI
 # -------------------------------------------------------------------------------------------------
 
-# TODO
-# class GUI:
-#     def __init__(self, c):
-#         self.c = c
-#         self._gui = self.c.gui("GUI")
-#         self._make_slider_ms()
+class GUI:
+    def __init__(self, ctrl):
+        self.ctrl = ctrl
+        self.c = ctrl.rv.canvas
+        self.m = ctrl.m
 
-#     def _make_slider_ms(self, raster_view):
-#         # Slider controlling the marker size.
-#         self._slider_ms = self._gui.control(
-#             'slider_float', 'marker size', vmin=.1, vmax=30)
+        self._gui = self.c.gui("GUI")
+        self._make_slider_ms(ctrl.rv)
+        self._make_slider_cluster(
+            ctrl.rv, ctrl.m.d.spike_clusters.min(), ctrl.m.d.spike_clusters.max())
+        self._make_slider_range(ctrl.vmin, ctrl.vmax)
+        self._make_button_filter(ctrl)
 
-#         @self._slider_ms.connect
-#         def on_ms_change(x):
-#             raster_view.change_marker_size(x)
+    def _make_slider_ms(self, raster_view):
+        # Slider controlling the marker size.
+        self._slider_ms = self._gui.control(
+            'slider_float', 'marker size', vmin=.1, vmax=30)
 
-#     def _make_slider_cluster(self, raster_view, vmin, vmax, spike_times, spike_clusters, spike_depths, spike_colors):
-#         # Slider controlling the cluster to highlight.
-#         self._slider_cluster = self._gui.control(
-#             'slider_int', 'cluster', vmin=vmin, vmax=vmax)
+        @self._slider_ms.connect
+        def on_ms_change(x):
+            raster_view.change_marker_size(x)
 
-#         @self._slider_cluster.connect
-#         def on_cluster_change(cl):
-#             idx = spike_clusters == cl
-#             if np.sum(idx) == 0:
-#                 return
-#             i = np.nonzero(idx)[0][0]
-#             x = spike_times[idx]
-#             y = spike_depths[idx]
-#             color = spike_colors[i]
-#             raster_view.show_line(x, y, color)
+    def _make_slider_cluster(self, raster_view, cmin, cmax):
+        # Slider controlling the cluster to highlight.
+        self._slider_cluster = self._gui.control(
+            'slider_int', 'cluster', vmin=cmin, vmax=cmax)
 
-#     def _make_slider_range(self, raster_view):
-#         # Slider controlling the imshow value range.
-#         self.slider = self.gui.control(
-#             'slider_float2', 'vrange', vmin=self.vmin, vmax=self.vmax)
+        @self._slider_cluster.connect
+        def on_cluster_change(cl):
+            x, y, color = self.m.get_cluster_spikes(cl)
+            raster_view.show_line(x, y, color)
 
-#         @self.slider.connect
-#         def on_vrange(i, j):
-#             self.set_vrange(i, j)
+    def _make_slider_range(self, vmin, vmax):
+        # Slider controlling the imshow value range.
+        self._slider_range = self._gui.control(
+            'slider_float2', 'vrange', vmin=vmin, vmax=vmax)
+
+        @self._slider_range.connect
+        def on_vrange(i, j):
+            self.ctrl.set_vrange(i, j)
+
+    def _make_button_filter(self, ctrl):
+        self._button_filter = self._gui.control('button', 'next filter')
+
+        @self._button_filter.connect
+        def on_click(e):
+            ctrl.next_filter()
 
 
 # -------------------------------------------------------------------------------------------------
@@ -656,6 +639,7 @@ if __name__ == '__main__':
     ev = EphysView(c, p1, n_channels=m.n_channels)
 
     # Controller
-    ctl = Controller(m, rv, ev)
+    ctrl = Controller(m, rv, ev)
+    gui = GUI(ctrl)
 
     run()
