@@ -311,12 +311,10 @@ class EphysView:
         self.v_image = self.panel.visual('image')
         self.v_image.texture(self.tex)
 
+        self.v_line = None
+
         self.set_xrange(0, 1)
         self._set_tex_coords(1)
-
-        # Cluster line.
-        self.v_line = self.panel.visual('path')
-        self.v_line.data('pos', np.zeros((2, 3)))
 
     def _set_tex_coords(self, x=1):
         # Top left, top right, bottom right, bottom left
@@ -347,9 +345,21 @@ class EphysView:
         self.tex.upload(self._arr)
 
     def show_line(self, x, y, color):
-        p = np.c_[x, y, np.zeros(len(x))]
+        # DEBUG
+        return
+        n = len(x)
+        if n <= 1:
+            self.hide_line()
+            return
+        p = np.c_[x, y, np.zeros(n)]
+        if self.v_line is None:
+            self.v_line = self.panel.visual('path')
         self.v_line.data('pos', p)
         self.v_line.data('color', color)
+
+    def hide_line(self):
+        if self.v_line:
+            self.v_line.data('color', np.zeros((2, 4), dtype=np.uint8))
 
 
 # -------------------------------------------------------------------------------------------------
@@ -498,6 +508,8 @@ class Controller:
         self.img = img
         self.ev.set_image(self.img)
 
+        self.ev.hide_line()
+
     def update_ephys_view(self):
         self.set_range(self.t0, self.t1)
 
@@ -618,14 +630,17 @@ class GUI:
         @self._slider_cluster.connect
         def on_cluster_change(cl):
             # Cluster line in raster view.
-            x, y, color = self.m.get_cluster_spikes(cl)
-            raster_view.show_line(x, y, color)
+            e = self.m.get_cluster_spikes(cl)
+            if e:
+                raster_view.show_line(*e)
 
             # Cluster line in ephys view.
             t0, t1 = self.ctrl.t0, self.ctrl.t1
             e = self.m.get_cluster_spikes(cl, (t0, t1))
             if e:
                 ephys_view.show_line(*e)
+            else:
+                ephys_view.hide_line()
 
     def _make_slider_range(self, vmin, vmax):
         # Slider controlling the imshow value range.
