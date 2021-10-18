@@ -16,6 +16,10 @@ import numpy.random as nr
 from ibllib.atlas import AllenAtlas
 from ibllib.io.spikeglx import download_raw_partial
 from one.api import ONE
+from ibllib.pipes.ephys_alignment import EphysAlignment
+from brainbox.io.one import load_channels_from_insertion
+from ibllib.ephys.neuropixel import SITES_COORDINATES
+
 
 from datoviz import canvas, run, colormap, colorpal
 
@@ -120,6 +124,19 @@ def _load_spikes(probe_id):
     return SpikeData(st, sc, sd, color)
 
 
+@memory.cache
+def _load_brain_regions(eid, probe_idx=0):
+    one = ONE()
+    ba = AllenAtlas()
+
+    probe = 'probe0%d' % probe_idx
+    ins = one.alyx.rest('insertions', 'list', session=eid, name=probe)[0]
+
+    xyz_chans = load_channels_from_insertion(ins, depths=SITES_COORDINATES[:, 1], one=one, ba=ba)
+    region, region_label, region_color, _ = EphysAlignment.get_histology_regions(xyz_chans, SITES_COORDINATES[:, 1], brain_atlas=ba)
+    return region, region_label, region_color
+
+
 class Model:
     def __init__(self, eid, probe_id, probe_idx=0, one=None):
         self.eid = eid
@@ -157,6 +174,10 @@ class Model:
         self.depth_max = self.d.spike_depths.max()
         assert self.depth_min < self.depth_max
         logger.info(f"Loaded {len(self.d.spike_times)} spikes")
+
+        # Brain regions.
+        r, rl, rc = _load_brain_regions(eid, probe_idx)
+        self.regions = Bunch(r=r, rl=rl, rc=rc)
 
     # return tuple (info, array)
     def _download_chunk(self, eid, probe_idx=0, chunk_idx=0):
@@ -674,11 +695,23 @@ def get_eid(probe_idx=0):
     return insertion_id, insertions[probe_idx]['session_info']['id']
 
 
-def brain_regions(panel):
+def plot_brain_regions(panel, regions):
+    r = regions.r
+    rc = regions.rc
+
+    n = r.shape[0]
+    p0 = np.zeros((n, 3))
+    p0[:, 0] = 0
+    p0[:, 1] = r[:, 0]
+
+    p1 = np.zeros((n, 3))
+    p1[:, 0] = 1
+    p1[:, 1] = r[:, 1]
+
     v = panel.visual('rectangle')
-    v.data('pos', np.array([[-1, -1, 0]]), idx=0)
-    v.data('pos', np.array([[+1, +1, 0]]), idx=1)
-    v.data('color', np.array([[255, 0, 0, 255]]))
+    v.data('pos', p0, idx=0)
+    v.data('pos', p1, idx=1)
+    v.data('color', np.c_[rc, 255 * np.ones(n)].astype(np.uint8))
 
 
 if __name__ == '__main__':
@@ -696,11 +729,11 @@ if __name__ == '__main__':
 
     # Brain regions in the right panels.
     ps0 = scene.panel(row=0, col=1, controller='axes', hide_grid=True)
-    ps1 = scene.panel(row=0, col=1, controller='axes', hide_grid=True)
+    ps1 = scene.panel(row=1, col=1, controller='axes', hide_grid=True)
     ps0.size('x', .2)
 
-    brain_regions(ps0)
-    brain_regions(ps1)
+    plot_brain_regions(ps0, m.regions)
+    plot_brain_regions(ps1, m.regions)
 
     # Views.
     rv = RasterView(c, p0)
