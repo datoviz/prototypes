@@ -11,6 +11,7 @@ from pathlib import Path
 
 from joblib import Memory
 import numpy as np
+import numpy.random as nr
 
 from ibllib.atlas import AllenAtlas
 from ibllib.io.spikeglx import download_raw_partial
@@ -673,18 +674,33 @@ def get_eid(probe_idx=0):
     return insertion_id, insertions[probe_idx]['session_info']['id']
 
 
+def brain_regions(panel):
+    v = panel.visual('rectangle')
+    v.data('pos', np.array([[-1, -1, 0]]), idx=0)
+    v.data('pos', np.array([[+1, +1, 0]]), idx=1)
+    v.data('color', np.array([[255, 0, 0, 255]]))
+
+
 if __name__ == '__main__':
     probe_idx = 0
     eid, probe_id = get_eid(probe_idx)
     m = Model(eid, probe_id, probe_idx=0)
 
     # Create the Datoviz view.
-    c = canvas(width=1600, height=1200, show_fps=True)
-    scene = c.scene(rows=2, cols=1)
+    c = canvas(width=1200, height=800, show_fps=True)
+    scene = c.scene(rows=2, cols=2)
 
     # Panels.
     p0 = scene.panel(row=0, controller='axes', hide_grid=False)
     p1 = scene.panel(row=1, controller='axes', hide_grid=True)
+
+    # Brain regions in the right panels.
+    ps0 = scene.panel(row=0, col=1, controller='axes', hide_grid=True)
+    ps1 = scene.panel(row=0, col=1, controller='axes', hide_grid=True)
+    ps0.size('x', .2)
+
+    brain_regions(ps0)
+    brain_regions(ps1)
 
     # Views.
     rv = RasterView(c, p0)
