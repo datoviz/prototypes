@@ -241,6 +241,9 @@ class Model:
         # Select the spikes from the requested cluster within the time range.
         sc = self.d.spike_clusters[s]
         idx = sc == cl
+        return s, idx
+
+    def get_spike_pos_colors(self, s, idx):
         if np.sum(idx) == 0:
             return
 
@@ -304,6 +307,9 @@ class RasterView:
     def change_marker_size(self, x):
         assert 0 <= x and x <= 30
         self.v_point.data('ms', np.array([x]))
+
+    def change_colors(self, sc):
+        self.v_point.data('color', sc)
 
 
 class EphysView:
@@ -376,6 +382,10 @@ class EphysView:
     def hide_line(self):
         if self.v_line:
             self.v_line.data('color', np.zeros((2, 4), dtype=np.uint8))
+
+    def change_colors(self, sc):
+        # TODO
+        pass
 
 
 # -------------------------------------------------------------------------------------------------
@@ -641,22 +651,29 @@ class GUI:
     def _make_slider_cluster(self, raster_view, ephys_view, cmin, cmax):
         # Slider controlling the cluster to highlight.
         self._slider_cluster = self._gui.control(
-            'slider_int', 'cluster', vmin=cmin, vmax=cmax)
+            'slider_int', 'cluster', vmin=cmin - 1, vmax=cmax)
 
         @self._slider_cluster.connect
         def on_cluster_change(cl):
             # Cluster line in raster view.
-            e = self.m.get_cluster_spikes(cl)
+            s, idx = self.m.get_cluster_spikes(cl)
+            e = self.m.get_spike_pos_colors(s, idx)
             if e:
-                raster_view.show_line(*e)
+                _, _, color = e
+                sc = self.m.d.spike_colors.copy()
+                sc[~idx] = [128, 128, 128, 32]
+                raster_view.change_colors(sc)
+            else:
+                raster_view.change_colors(self.m.d.spike_colors)
 
             # Cluster line in ephys view.
-            t0, t1 = self.ctrl.t0, self.ctrl.t1
-            e = self.m.get_cluster_spikes(cl, (t0, t1))
-            if e:
-                ephys_view.show_line(*e)
-            else:
-                ephys_view.hide_line()
+            # TODO
+            # t0, t1 = self.ctrl.t0, self.ctrl.t1
+            # e = self.m.get_cluster_spikes(cl, (t0, t1))
+            # if e:
+            #     ephys_view.show_line(*e)
+            # else:
+            #     ephys_view.hide_line()
 
     def _make_slider_range(self, vmin, vmax):
         # Slider controlling the imshow value range.
