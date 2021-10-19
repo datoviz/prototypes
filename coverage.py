@@ -31,6 +31,7 @@ def _index_of(arr, lookup):
 
 def normalize_volume(v):
     v = v.astype(np.float32)
+    v[np.isnan(v)] = 0
     v -= v.min()
     v /= v.max()
     assert np.all(0 <= v)
@@ -141,7 +142,6 @@ class AtlasModel:
         # self.vol = atlas
 
 
-
 # -------------------------------------------------------------------------------------------------
 # Atlas view
 # -------------------------------------------------------------------------------------------------
@@ -186,7 +186,6 @@ class AtlasView:
         self.visual.data('texcoords', np.array([1, 0, w])[i], idx=3)
 
 
-
 # -------------------------------------------------------------------------------------------------
 # Atlas controller
 # -------------------------------------------------------------------------------------------------
@@ -199,7 +198,8 @@ class AtlasController:
         self.m = model
 
         # Canvas.
-        self.canvas = canvas(show_fps=True, width=1600, height=700, clear_color='black')
+        self.canvas = canvas(show_fps=True, width=1600,
+                             height=700, clear_color='black')
         self.scene = self.canvas.scene(rows=1, cols=2)
 
         # Shared 3D texture.
