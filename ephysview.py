@@ -61,15 +61,7 @@ def get_data_urls(eid, probe_idx=0, one=None):
         if fr['data_url']:
             url_ch = fr['data_url']
 
-    # Find URL to .meta file
-    dsets = one.alyx.rest(
-        'datasets', 'list', session=eid,
-        django='name__icontains,ap.meta,collection__endswith,probe%02d' % probe_idx)
-    for fr in dsets[0]['file_records']:
-        if fr['data_url']:
-            url_meta = fr['data_url']
-
-    return url_cbin, url_ch, url_meta
+    return url_cbin, url_ch
 
 
 # -------------------------------------------------------------------------------------------------
@@ -132,8 +124,10 @@ def _load_brain_regions(eid, probe_idx=0):
     probe = 'probe0%d' % probe_idx
     ins = one.alyx.rest('insertions', 'list', session=eid, name=probe)[0]
 
-    xyz_chans = load_channels_from_insertion(ins, depths=SITES_COORDINATES[:, 1], one=one, ba=ba)
-    region, region_label, region_color, _ = EphysAlignment.get_histology_regions(xyz_chans, SITES_COORDINATES[:, 1], brain_atlas=ba)
+    xyz_chans = load_channels_from_insertion(
+        ins, depths=SITES_COORDINATES[:, 1], one=one, ba=ba)
+    region, region_label, region_color, _ = EphysAlignment.get_histology_regions(
+        xyz_chans, SITES_COORDINATES[:, 1], brain_atlas=ba)
     return region, region_label, region_color
 
 
@@ -182,10 +176,10 @@ class Model:
     # return tuple (info, array)
     def _download_chunk(self, eid, probe_idx=0, chunk_idx=0):
         one = ONE()
-        url_cbin, url_ch, url_meta = get_data_urls(
+        url_cbin, url_ch = get_data_urls(
             eid, probe_idx=probe_idx, one=one)
         reader = download_raw_partial(
-            url_cbin, url_ch, url_meta, chunk_idx, chunk_idx)
+            url_cbin, url_ch, chunk_idx, chunk_idx)
         return reader._raw.cmeta, reader[:]
 
     def get_chunk(self, chunk_idx):
