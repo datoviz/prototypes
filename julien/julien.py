@@ -35,8 +35,11 @@ slider_offset = gui.control(
     "slider_float", "time offset", vmin=0, vmax=st[-1] - dt, value=0)
 slider_dt = gui.control(
     "slider_float", "time interval", vmin=0.1, vmax=100, value=dt)
+slider_ms = gui.control(
+    "slider_float", "marker size", vmin=0.01, vmax=20, value=2)
 
 
+@slider_offset.connect
 def change_offset(value):
     assert value >= 0
     global t
@@ -47,15 +50,17 @@ def change_offset(value):
     v.data('color', color)
 
 
-slider_offset.connect(change_offset)
-
-
 @slider_dt.connect
 def on_dt_changed(value):
     assert value >= 0
     global t, dt
     dt = value
     change_offset(t)
+
+
+@slider_ms.connect
+def on_ms_changed(value):
+    v.data('ms', np.array([value]))
 
 
 change_offset(0)
