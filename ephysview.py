@@ -269,8 +269,8 @@ class RasterView:
         self.v_point = self.panel.visual('point')
 
         # Cluster line.
-        self.v_line = self.panel.visual('line_strip')
-        self.v_line.data('pos', np.zeros((2, 3)))
+        self.v_spikes = self.panel.visual('line_strip')
+        self.v_spikes.data('pos', np.zeros((2, 3)))
 
         # Vertical lines.
         self.v_vert = self.panel.visual('path')
@@ -295,8 +295,8 @@ class RasterView:
 
     def show_line(self, x, y, color):
         p = np.c_[x, y, np.zeros(len(x))]
-        self.v_line.data('pos', p)
-        self.v_line.data('color', color)
+        self.v_spikes.data('pos', p)
+        self.v_spikes.data('color', color)
 
     def set_vert(self, x0, x1):
         self.v_vert.data('pos', np.array([
@@ -333,7 +333,7 @@ class EphysView:
         self.v_image = self.panel.visual('image')
         self.v_image.texture(self.tex)
 
-        self.v_line = None
+        self.v_spikes = None
 
         self.set_xrange(0, 1)
         self._set_tex_coords(1)
@@ -366,26 +366,24 @@ class EphysView:
         self._arr[:] = img[:]
         self.tex.upload(self._arr)
 
-    def show_line(self, x, y, color):
-        # DEBUG
-        return
-        n = len(x)
-        if n <= 1:
-            self.hide_line()
+    def show_spikes(self, times, depths, colors):
+        n = len(times)
+        if n == 0:
             return
-        p = np.c_[x, y, np.zeros(n)]
-        if self.v_line is None:
-            self.v_line = self.panel.visual('path')
-        self.v_line.data('pos', p)
-        self.v_line.data('color', color)
+        if self.v_spikes is None:
+            self.v_spikes = self.panel.visual('rectangle')
+        p = np.zeros((n, 3))
+        p[:, 0] = times
+        p[:, 1] = depths
 
-    def hide_line(self):
-        if self.v_line:
-            self.v_line.data('color', np.zeros((2, 4), dtype=np.uint8))
+        k = np.array([[.001, 100, 0]])
 
-    def change_colors(self, sc):
-        # TODO
-        pass
+        self.v_spikes.data('pos', p - k, idx=0)
+        self.v_spikes.data('pos', p + k, idx=1)
+        self.v_spikes.data('color', colors)
+
+    def change_colors(self, colors):
+        self.v_spikes.data('color', colors)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -451,25 +449,6 @@ class Controller:
             img[it0:it1, ic0:ic1, :3] * color).astype(img.dtype)
         return img
 
-    def highlight_spike(self, img, t, depth, color):
-        if t < self.t0 or t > self.t1:
-            logger.debug(
-                "Spike to be highlighted is beyond the bounds of the current data area")
-            return
-
-        dm, dM = self.m.depth_min, self.m.depth_max
-        x = (depth - dm) / (dM - dm)
-        assert 0 <= x <= 1
-        ic = int(round(x * (self.m.n_channels - 1)))
-
-        t = (t - self.t0) / float(self.t1 - self.t0)
-        assert 0 <= t <= 1
-        it = int(round(t * (self.ev.n_samples_tex - 1)))
-
-        nc = 5
-        nt = 15
-        return self.highlight_area(img, it - nt, it + nt, ic - nc, ic + nc, color)
-
     def to_image(self, data):
         # CAR
         data -= data.mean(axis=0)
@@ -503,10 +482,6 @@ class Controller:
         self.t0, self.t1 = t0, t1
         logger.info("Set time range %.3f %.3f" % (t0, t1))
 
-        # # Update slider only when changing the time by using another method than the slider.
-        # if self._do_update_control:
-        #     self._update_control()
-
         # Update the positions.
         self.ev.set_xrange(t0, t1)
 
@@ -520,21 +495,20 @@ class Controller:
         # Highlight the spikes.
         st = self.m.d.spike_times
         sd = self.m.d.spike_depths
-
+        sc = self.m.d.spike_colors
         imin = np.searchsorted(st, self.t0)
         imax = np.searchsorted(st, self.t1)
-        for i in range(imin, imax):
-            t = st[i]
-            d = sd[i]
-            color = self.m.d.spike_colors[i]
-            color = color[:3] / 255.0
-            img = self.highlight_spike(img, t, d, color)
+        times = st[imin:imax]
+        depths = sd[imin:imax]
+        colors = sc[imin:imax].copy()
+        colors[:, 3] = 128
+        self.ev.show_spikes(times, depths, colors)
 
         # Update the image.
         self.img = img
         self.ev.set_image(self.img)
 
-        self.ev.hide_line()
+        # self.ev.hide_line()
 
     def update_ephys_view(self):
         self.set_range(self.t0, self.t1)
@@ -655,7 +629,7 @@ class GUI:
 
         @self._slider_cluster.connect
         def on_cluster_change(cl):
-            # Cluster line in raster view.
+            # Highlight clusters in raster view.
             s, idx = self.m.get_cluster_spikes(cl)
             e = self.m.get_spike_pos_colors(s, idx)
             if e:
@@ -665,15 +639,6 @@ class GUI:
                 raster_view.change_colors(sc)
             else:
                 raster_view.change_colors(self.m.d.spike_colors)
-
-            # Cluster line in ephys view.
-            # TODO
-            # t0, t1 = self.ctrl.t0, self.ctrl.t1
-            # e = self.m.get_cluster_spikes(cl, (t0, t1))
-            # if e:
-            #     ephys_view.show_line(*e)
-            # else:
-            #     ephys_view.hide_line()
 
     def _make_slider_range(self, vmin, vmax):
         # Slider controlling the imshow value range.
