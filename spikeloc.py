@@ -2,14 +2,14 @@ import numpy as np
 from datoviz import canvas, run, colormap
 
 # Data loading.
-x = np.load('x_position.npy')
-y = np.load('y_position.npy')
-z = np.load('z_position.npy')
+x = np.load('spikeloc/x_position.npy')
+y = np.load('spikeloc/y_position.npy')
+z = np.load('spikeloc/z_position.npy')
 pos = np.c_[x, z, y]
 
-st = np.load('spike_times.npy') / 3e4
-amp = np.load('amplitudes.npy')
-alpha = np.load('alphas.npy')
+st = np.load('spikeloc/spike_times.npy') / 3e4
+amp = np.load('spikeloc/amplitudes.npy')
+alpha = np.load('spikeloc/alphas.npy')
 
 # Color.
 log_ptp = amp
@@ -65,15 +65,3 @@ def on_ms_changed(value):
 
 change_offset(0)
 run()
-
-
-# def on_timer():
-#     global t
-#     i, j = np.searchsorted(st, [t, t + 5])
-#     color[:, 3] = 5
-#     color[i:j, 3] = 200
-#     v.data('color', color)
-#     t += 5
-#     t = t % 1000
-
-# c._connect('timer', on_timer, 1. / 10)
