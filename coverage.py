@@ -247,17 +247,17 @@ class AtlasController:
     def on_mouse_wheel(self, x, y, dx, dy, modifiers=()):
         if not modifiers:
             return
-        p = self.canvas.panel_at(x, y)
+        p = self.scene.panel_at(x, y)
         if not p:
             return
         x, y = p.pick(x, y)
         if p == self.p0:
             self.wz += .0001 * dy
-            self.gui.set_value('ap', self.wz)
+            self.slider0.set(self.wz)
             self.slice_z(self.wz)
         elif p == self.p1:
             self.wy += .0001 * dy
-            self.gui.set_value('ml', self.wy)
+            self.slider1.set(self.wy)
             self.slice_y(self.wy)
 
 
