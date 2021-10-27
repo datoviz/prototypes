@@ -29,8 +29,8 @@ All prototypes are experimental. Use at your own risks!
     python ephysview.py f25642c6-27a5-4a97-9ea0-06652db79fbd 0
     ```
 
-* Description: shows the full raster plot of an ephys session at the top, and a small section of the raw data on the bottom.
-* Use: control+click in the top panel to select a particular time, and load (download + on-the-fly decompression) the corresponding chunk of raw data in the bottom panel.
+* Description: shows the full raster plot of an ephys session in the upper panel, and a small section of the raw data in the lower panel.
+* Use: control+click in the top panel to select a particular time. The bottom panel will show the corresponding data snippet. Loading the data might take a while because of decompression time.
 
 ![](images/ephysview.jpg)
 
