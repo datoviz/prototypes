@@ -8,6 +8,7 @@ Python example of an interactive raw ephys data viewer.
 
 import logging
 from pathlib import Path
+import sys
 
 from joblib import Memory
 import numpy as np
@@ -661,14 +662,31 @@ class GUI:
 # Entry point
 # -------------------------------------------------------------------------------------------------
 
-def get_eid(probe_idx=0):
+def get_eid_default():
     return 'f25642c6-27a5-4a97-9ea0-06652db79fbd', 'bebe7c8f-0f34-4c3a-8fbb-d2a5119d2961'
 
+
+def get_eid_one(probe_idx=0):
     one = ONE()
     insertions = one.alyx.rest(
         'insertions', 'list', dataset_type='channels.mlapdv')
-    insertion_id = insertions[probe_idx]['id']
-    return insertion_id, insertions[probe_idx]['session_info']['id']
+    probe_id = insertions[probe_idx]['id']
+    eid = insertions[probe_idx]['session_info']['id']
+    return eid, probe_id
+
+
+def get_eid_argv():
+    if len(sys.argv) <= 1:
+        return get_eid_default()
+    eid = sys.argv[1]
+    probe_idx = int(sys.argv[2]) if len(sys.argv) == 3 else 0
+    probe = 'probe0%d' % probe_idx
+    logger.info("Finding insertion id #%d for eid %s...", probe_idx, eid)
+    one = ONE()
+    ins = one.alyx.rest('insertions', 'list', session=eid, name=probe)[0]
+    probe_id = ins['id']
+    logger.info("Found insertion id: %s", probe_id)
+    return eid, probe_id
 
 
 def plot_brain_regions(panel, regions):
@@ -691,8 +709,7 @@ def plot_brain_regions(panel, regions):
 
 
 if __name__ == '__main__':
-    probe_idx = 0
-    eid, probe_id = get_eid(probe_idx)
+    eid, probe_id = get_eid_argv()
     m = Model(eid, probe_id, probe_idx=0)
 
     # Create the Datoviz view.
