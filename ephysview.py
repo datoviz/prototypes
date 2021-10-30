@@ -6,6 +6,7 @@ Python example of an interactive raw ephys data viewer.
 # Imports
 # -------------------------------------------------------------------------------------------------
 
+from functools import lru_cache
 import logging
 from pathlib import Path
 import sys
@@ -15,9 +16,11 @@ import numpy as np
 import numpy.random as nr
 
 from ibllib.atlas import AllenAtlas
-from ibllib.io.spikeglx import download_raw_partial
+# from ibllib.io.spikeglx import download_raw_partial
+from ibllib.dsp import voltage
 from one.api import ONE
 from ibllib.pipes.ephys_alignment import EphysAlignment
+from brainbox.io.spikeglx import stream
 from brainbox.io.one import load_channels_from_insertion
 from ibllib.ephys.neuropixel import SITES_COORDINATES
 
@@ -85,18 +88,19 @@ class SpikeData(Bunch):
 
 location = Path('~/.one_cache/').expanduser()
 memory = Memory(location, verbose=0)
+SAMPLE_SKIP = 0  # DEBUG. 200  # Skip beginning for show, otherwise blurry due to filter
 
 
 @memory.cache
 def _load_spikes(probe_id):
     one = ONE()
     dtypes = [
-        'spikes.times', 'spikes.amps', 'spikes.clusters', 'spikes.depths',
-        'clusters.brainLocationIds_ccf_2017']
+        'spikes.times', 'spikes.amps', 'spikes.clusters', 'spikes.depths']
     dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id)
     dsets_int = [[d for d in dsets if d['dataset_type'] in _][0]
                  for _ in dtypes]
-    st, sa, sc, sd, cr = (
+
+    st, sa, sc, sd = (
         np.load(_) for _ in one._download_datasets(dsets_int) if str(_).endswith('.npy'))
 
     sd[np.isnan(sd)] = sd[~np.isnan(sd)].min()
@@ -137,14 +141,15 @@ class Model:
         self.eid = eid
         self.probe_id = probe_id
         self.probe_idx = probe_idx
+        assert one
         self.one = one
 
-        self._download_chunk = memory.cache(self._download_chunk)
+        self._download_chunk = lru_cache(self._download_chunk)
 
         # Ephys data
         logger.info(
             f"Downloading first chunk of ephys data {eid}, probe #{probe_idx}")
-        info, arr = self._download_chunk(eid, probe_idx=probe_idx, chunk_idx=0)
+        info, arr = self._download_chunk(0)
         assert info
         assert arr.size
 
@@ -175,16 +180,26 @@ class Model:
         self.regions = Bunch(r=r, rl=rl, rc=rc)
 
     # return tuple (info, array)
-    def _download_chunk(self, eid, probe_idx=0, chunk_idx=0):
-        one = ONE()
-        url_cbin, url_ch = get_data_urls(
-            eid, probe_idx=probe_idx, one=one)
-        reader = download_raw_partial(
-            url_cbin, url_ch, chunk_idx, chunk_idx)
-        return reader._raw.cmeta, reader[:]
+    def _download_chunk(self, chunk_idx):
+        # url_cbin, url_ch = get_data_urls(eid, probe_idx=probe_idx, one=self.one)
+        # reader = download_raw_partial(
+        #     url_cbin, url_ch, chunk_idx, chunk_idx)
+        # return reader._raw.cmeta, reader[:]
+        try:
+            sr, t0 = stream(self.probe_id, chunk_idx, nsecs=1, one=self.one)
+        except BaseException as e:
+            print(f'PID {probe_id} : recording shorter than {int(chunk_idx / 60.0)} min')
+            return
+        raw = sr[:, :-1].T
+        destripe = voltage.destripe(raw, fs=sr.fs)
+        X = destripe[:, :].T  # :int(DISPLAY_TIME * sr.fs)].T
+        Xs = X[SAMPLE_SKIP:]  # Remove artifact at begining
+        # Tplot = Xs.shape[1] / sr.fs
+        info = sr._raw.cmeta
+        return info, Xs
 
     def get_chunk(self, chunk_idx):
-        return self._download_chunk(self.eid, self.probe_idx, chunk_idx=chunk_idx)[1]
+        return self._download_chunk(chunk_idx)[1]
 
     def _get_range_chunks(self, t0, t1):
         # Chunk idxs, assuming 1 second chunk
@@ -663,7 +678,8 @@ class GUI:
 # -------------------------------------------------------------------------------------------------
 
 def get_eid_default():
-    return 'f25642c6-27a5-4a97-9ea0-06652db79fbd', 'bebe7c8f-0f34-4c3a-8fbb-d2a5119d2961'
+    # return 'f25642c6-27a5-4a97-9ea0-06652db79fbd', 'bebe7c8f-0f34-4c3a-8fbb-d2a5119d2961'
+    return '15948667-747b-4702-9d53-354ac70e9119', '4e6dfe08-cab0-4a05-903b-94283cb9f8e7'
 
 
 def get_eid_one(probe_idx=0):
@@ -710,7 +726,8 @@ def plot_brain_regions(panel, regions):
 
 if __name__ == '__main__':
     eid, probe_id = get_eid_argv()
-    m = Model(eid, probe_id, probe_idx=0)
+    one = ONE()
+    m = Model(eid, probe_id, probe_idx=0, one=one)
 
     # Create the Datoviz view.
     c = canvas(width=1200, height=800, show_fps=True)
