@@ -334,6 +334,8 @@ class EphysView:
         self.panel = panel
         self.dmin = dmin
         self.dmax = dmax
+        self.colors = None
+        self.alpha = None
 
         assert n_channels > 0
         self.n_channels = n_channels
@@ -382,6 +384,11 @@ class EphysView:
         self._arr[:] = img[:]
         self.tex.upload(self._arr)
 
+    def _set_colors(self, colors):
+        if self.alpha is not None:
+            colors[:, 3] = np.clip(int(self.alpha * 255), 0, 255)
+        self.v_spikes.data('color', colors)
+
     def show_spikes(self, times, depths, colors):
         n = len(times)
         if n == 0:
@@ -396,9 +403,17 @@ class EphysView:
 
         self.v_spikes.data('pos', p - k, idx=0)
         self.v_spikes.data('pos', p + k, idx=1)
-        self.v_spikes.data('color', colors)
+        self._set_colors(colors)
+        self.colors = colors
 
     def change_colors(self, colors):
+        self._set_colors(colors)
+        self.colors = colors
+
+    def change_alpha(self, alpha):
+        colors = self.colors.copy()
+        self.alpha = alpha
+        self._set_colors(colors)
         self.v_spikes.data('color', colors)
 
 
@@ -624,6 +639,7 @@ class GUI:
 
         self._gui = self.c.gui("GUI")
         self._make_slider_ms(ctrl.rv)
+        self._make_slider_spikes(ctrl.ev)
         self._make_slider_cluster(
             ctrl.rv, ctrl.ev, ctrl.m.d.spike_clusters.min(), ctrl.m.d.spike_clusters.max())
         self._make_slider_range(ctrl.vmin, ctrl.vmax)
@@ -664,6 +680,15 @@ class GUI:
         @self._slider_range.connect
         def on_vrange(i, j):
             self.ctrl.set_vrange(i, j)
+
+    def _make_slider_spikes(self, ephys_view):
+        # Slider controlling the marker size.
+        self._slider_spikes = self._gui.control(
+            'slider_float', 'spikes opacity', vmin=0, vmax=1)
+
+        @self._slider_spikes.connect
+        def on_opacity_change(x):
+            ephys_view.change_alpha(x)
 
     def _make_button_filter(self, ctrl):
         self._button_filter = self._gui.control('button', 'next filter')
