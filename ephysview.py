@@ -15,13 +15,14 @@ from joblib import Memory
 import numpy as np
 import numpy.random as nr
 
-from ibllib.atlas import AllenAtlas
-# from ibllib.io.spikeglx import download_raw_partial
+from ibllib.atlas import AllenAtlas, BrainRegions
 from ibllib.dsp import voltage
 from one.api import ONE
 from ibllib.pipes.ephys_alignment import EphysAlignment
 from brainbox.io.spikeglx import stream
-from brainbox.io.one import load_channels_from_insertion
+from brainbox.io.one import (
+    load_channels_from_insertion, load_spike_sorting_with_channel, load_spike_sorting_fast,
+)
 from ibllib.ephys.neuropixel import SITES_COORDINATES
 
 
@@ -96,21 +97,28 @@ CMAX = .00008
 
 
 @memory.cache
-def _load_spikes(probe_id):
+def _load_spikes(eid, probe_idx=0, fs=3e4):
     one = ONE()
-    dtypes = [
-        'spikes.times', 'spikes.amps', 'spikes.clusters', 'spikes.depths']
-    dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id)
-    dsets_int = [[d for d in dsets if d['dataset_type'] in _][0]
-                 for _ in dtypes]
+    br = BrainRegions()
 
-    st, sa, sc, sd = (
-        np.load(_) for _ in one._download_datasets(dsets_int) if str(_).endswith('.npy'))
+    probe_name = 'probe%02d' % probe_idx
+    spikes, clusters, channels = load_spike_sorting_fast(
+        eid=eid, one=one, probe=probe_name,
+        # spike_sorter='pykilosort',
+        dataset_types=['spikes.samples', 'spikes.amps', 'spikes.depths'],
+        brain_regions=br)
+
+    st = spikes[probe_name]['samples'] / fs
+    sc = spikes[probe_name]['clusters']
+    sa = spikes[probe_name]['amps']
+    sd = spikes[probe_name]['depths']
+    n = len(st)
 
     sd[np.isnan(sd)] = sd[~np.isnan(sd)].min()
 
+    # Colored or gray spikes?
     # color = colorpal(sc.astype(np.int32), cpal='glasbey')
-    color = np.tile(np.array([127, 127, 127, 32]), (len(sc), 1))
+    color = np.tile(np.array([127, 127, 127, 32]), (n, 1))
 
     # assert 100 < len(cr) < 1000
     # # Brain region colors
@@ -155,6 +163,7 @@ class Model:
         logger.info(
             f"Downloading first chunk of ephys data {eid}, probe #{probe_idx}")
         info, arr = self._download_chunk(0)
+        # HACK: this sets self.fs, the sample rate
         assert info
         assert arr.size
 
@@ -174,7 +183,7 @@ class Model:
             f"{self.n_samples=}, {self.n_channels=}, {self.duration=}")
 
         # Spike data.
-        self.d = _load_spikes(probe_id)
+        self.d = _load_spikes(eid, probe_idx, fs=self.fs)
         self.depth_min = self.d.spike_depths.min()
         self.depth_max = self.d.spike_depths.max()
         assert self.depth_min < self.depth_max
@@ -196,6 +205,7 @@ class Model:
             print(f'PID {probe_id} : recording shorter than {int(chunk_idx / 60.0)} min')
             return
         raw = sr[:, :-1].T
+        self.fs = sr.fs
         destripe = voltage.destripe(raw, fs=sr.fs)
         X = destripe[:, :].T  # :int(DISPLAY_TIME * sr.fs)].T
         Xs = X[SAMPLE_SKIP:]  # Remove artifact at begining
@@ -734,9 +744,14 @@ class GUI:
 # -------------------------------------------------------------------------------------------------
 
 def get_eid_default():
+    # eid, probeid
     # return 'f25642c6-27a5-4a97-9ea0-06652db79fbd', 'bebe7c8f-0f34-4c3a-8fbb-d2a5119d2961'
     # return '15948667-747b-4702-9d53-354ac70e9119', '4e6dfe08-cab0-4a05-903b-94283cb9f8e7'
-    return '15763234-d21e-491f-a01b-1238eb96d389', '8ca1a850-26ef-42be-8b28-c2e2d12f06d6'
+    # return '15763234-d21e-491f-a01b-1238eb96d389', '8ca1a850-26ef-42be-8b28-c2e2d12f06d6'
+
+    # eid, pname = one.pid2eid(pid)
+
+    return '41872d7f-75cb-4445-bb1a-132b354c44f0', '8b7c808f-763b-44c8-b273-63c6afbc6aae'
 
 
 def get_eid_one(probe_idx=0):
