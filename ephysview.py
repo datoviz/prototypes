@@ -411,7 +411,7 @@ class EphysView:
         if self.v_spikes is None:
             self.v_spikes = self.panel.visual('marker')
             self.v_spikes.data('ms', np.array([20]))
-            self.v_spikes.data('marker', np.array([5]))  # HACK: cross marker
+            # self.v_spikes.data('marker', np.array([5]))  # HACK: cross marker
         p = np.zeros((n, 3))
         p[:, 0] = times
         p[:, 1] = depths
@@ -707,8 +707,8 @@ class GUI:
         # Slider controlling the imshow value range.
         self._slider_range = self._gui.control(
             'slider_float2', 'vrange', vmin=vmin, vmax=vmax)
-        if value is not None:
-            self._slider_range.set(value)
+        # if value is not None:
+        #     self._slider_range.set(value)
 
         @self._slider_range.connect
         def on_vrange(i, j):
