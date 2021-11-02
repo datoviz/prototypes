@@ -606,6 +606,12 @@ class Controller:
         assert arr_f.shape == arr.shape
         return arr_f
 
+    # Gain
+    # ---------------------------------------------------------------------------------------------
+
+    def reset_gain(self):
+        self.set_vrange(CMIN, CMAX)
+
     # Event callbacks
     # ---------------------------------------------------------------------------------------------
 
@@ -653,6 +659,7 @@ class GUI:
         vmid = .5 * (vmax + vmin)
         self._make_slider_range(vmin - delta, vmid + delta, (vmin, vmax))
         self._make_button_filter(ctrl)
+        self._make_button_gain(ctrl)
 
     def _make_slider_ms(self, raster_view):
         # Slider controlling the marker size.
@@ -707,6 +714,14 @@ class GUI:
         @self._button_filter.connect
         def on_click(e):
             ctrl.next_filter()
+
+    def _make_button_gain(self, ctrl):
+        self._button_gain = self._gui.control('button', 'reset gain')
+
+        @self._button_gain.connect
+        def on_click(e):
+            ctrl.reset_gain()
+            self._slider_range.set((CMIN, CMAX))
 
 
 # -------------------------------------------------------------------------------------------------
