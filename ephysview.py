@@ -109,7 +109,8 @@ def _load_spikes(probe_id):
 
     sd[np.isnan(sd)] = sd[~np.isnan(sd)].min()
 
-    color = colorpal(sc.astype(np.int32), cpal='glasbey')
+    # color = colorpal(sc.astype(np.int32), cpal='glasbey')
+    color = np.tile(np.array([127, 127, 127, 32]), (len(sc), 1))
 
     # assert 100 < len(cr) < 1000
     # # Brain region colors
@@ -296,7 +297,7 @@ class RasterView:
         self.v_vert = self.panel.visual('path')
         self.v_vert.data('length', np.array([2, 2]))
 
-    def show_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors, ms=2):
+    def show_spikes(self, spike_times, spike_clusters, spike_depths, spike_colors, ms=.5):
         self.ymin = spike_depths.min()
         self.ymax = spike_depths.max()
 
@@ -539,6 +540,10 @@ class Controller:
         depths = sd[imin:imax]
         colors = sc[imin:imax].copy()
         colors[:, 3] = 128
+        # HACK: color spikes in the ephys view
+        colors[:, 0] = 255
+        colors[:, 1] = 0
+        colors[:, 2] = 0
         self.ev.show_spikes(times, depths, colors)
 
         # Update the image.
@@ -664,7 +669,7 @@ class GUI:
     def _make_slider_ms(self, raster_view):
         # Slider controlling the marker size.
         self._slider_ms = self._gui.control(
-            'slider_float', 'marker size', vmin=.1, vmax=30)
+            'slider_float', 'marker size', vmin=.01, vmax=20)
 
         @self._slider_ms.connect
         def on_ms_change(x):
