@@ -398,15 +398,14 @@ class EphysView:
         if n == 0:
             return
         if self.v_spikes is None:
-            self.v_spikes = self.panel.visual('rectangle')
+            self.v_spikes = self.panel.visual('marker')
+            self.v_spikes.data('ms', np.array([20]))
+            self.v_spikes.data('marker', np.array([5]))  # HACK: cross marker
         p = np.zeros((n, 3))
         p[:, 0] = times
         p[:, 1] = depths
 
-        k = np.array([[.001, 100, 0]])
-
-        self.v_spikes.data('pos', p - k, idx=0)
-        self.v_spikes.data('pos', p + k, idx=1)
+        self.v_spikes.data('pos', p)
         self._set_colors(colors)
         self.colors = colors
 
@@ -419,6 +418,7 @@ class EphysView:
         self.alpha = alpha
         self._set_colors(colors)
         self.v_spikes.data('color', colors)
+        self.v_spikes.data('color', np.array([0, 0, 0, alpha], dtype=np.float32), idx=1)
 
 
 # -------------------------------------------------------------------------------------------------
