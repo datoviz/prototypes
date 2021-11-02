@@ -88,7 +88,11 @@ class SpikeData(Bunch):
 
 location = Path('~/.one_cache/').expanduser()
 memory = Memory(location, verbose=0)
+
 SAMPLE_SKIP = 0  # DEBUG. 200  # Skip beginning for show, otherwise blurry due to filter
+CMIN = -.0001
+CMAX = .00008
+
 
 
 @memory.cache
@@ -485,8 +489,10 @@ class Controller:
         data -= data.mean(axis=0)
 
         # Vrange
-        self.vmin = data.min() if self.vmin is None else self.vmin
-        self.vmax = data.max() if self.vmax is None else self.vmax
+        # self.vmin = data.min() if self.vmin is None else self.vmin
+        # self.vmax = data.max() if self.vmax is None else self.vmax
+        self.vmin = CMIN if self.vmin is None else self.vmin
+        self.vmax = CMAX if self.vmax is None else self.vmax
 
         # Colormap
         img = colormap(data.ravel().astype(np.double),
@@ -642,7 +648,10 @@ class GUI:
         self._make_slider_spikes(ctrl.ev)
         self._make_slider_cluster(
             ctrl.rv, ctrl.ev, ctrl.m.d.spike_clusters.min(), ctrl.m.d.spike_clusters.max())
-        self._make_slider_range(ctrl.vmin, ctrl.vmax)
+        vmin, vmax = ctrl.vmin, ctrl.vmax
+        delta = vmax - vmin
+        vmid = .5 * (vmax + vmin)
+        self._make_slider_range(vmin - delta, vmid + delta, (vmin, vmax))
         self._make_button_filter(ctrl)
 
     def _make_slider_ms(self, raster_view):
@@ -672,10 +681,12 @@ class GUI:
             else:
                 raster_view.change_colors(self.m.d.spike_colors)
 
-    def _make_slider_range(self, vmin, vmax):
+    def _make_slider_range(self, vmin, vmax, value=None):
         # Slider controlling the imshow value range.
         self._slider_range = self._gui.control(
             'slider_float2', 'vrange', vmin=vmin, vmax=vmax)
+        if value is not None:
+            self._slider_range.set(value)
 
         @self._slider_range.connect
         def on_vrange(i, j):
@@ -704,7 +715,8 @@ class GUI:
 
 def get_eid_default():
     # return 'f25642c6-27a5-4a97-9ea0-06652db79fbd', 'bebe7c8f-0f34-4c3a-8fbb-d2a5119d2961'
-    return '15948667-747b-4702-9d53-354ac70e9119', '4e6dfe08-cab0-4a05-903b-94283cb9f8e7'
+    # return '15948667-747b-4702-9d53-354ac70e9119', '4e6dfe08-cab0-4a05-903b-94283cb9f8e7'
+    return '15763234-d21e-491f-a01b-1238eb96d389', '8ca1a850-26ef-42be-8b28-c2e2d12f06d6'
 
 
 def get_eid_one(probe_idx=0):
@@ -755,7 +767,7 @@ if __name__ == '__main__':
     m = Model(eid, probe_id, probe_idx=0, one=one)
 
     # Create the Datoviz view.
-    c = canvas(width=1200, height=800, show_fps=True)
+    c = canvas(width=1200, height=800, show_fps=False)
     scene = c.scene(rows=2, cols=2)
 
     # Panels.
