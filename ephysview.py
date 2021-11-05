@@ -193,6 +193,9 @@ class Model:
         r, rl, rc = _load_brain_regions(eid, probe_idx)
         self.regions = Bunch(r=r, rl=rl, rc=rc)
 
+        # channels['rawInd'] = np.arange(n_chan)
+        # spikes['rawInd'] = channels['rawInd'][clusters['channels'][spikes['clusters']]]
+
     # return tuple (info, array)
     def _download_chunk(self, chunk_idx):
         # url_cbin, url_ch = get_data_urls(eid, probe_idx=probe_idx, one=self.one)
@@ -411,7 +414,7 @@ class EphysView:
         if self.v_spikes is None:
             self.v_spikes = self.panel.visual('marker')
             self.v_spikes.data('ms', np.array([20]))
-            # self.v_spikes.data('marker', np.array([5]))  # HACK: cross marker
+            self.v_spikes.data('marker', np.array([5]))  # HACK: cross marker
         p = np.zeros((n, 3))
         p[:, 0] = times
         p[:, 1] = depths
@@ -707,8 +710,8 @@ class GUI:
         # Slider controlling the imshow value range.
         self._slider_range = self._gui.control(
             'slider_float2', 'vrange', vmin=vmin, vmax=vmax)
-        # if value is not None:
-        #     self._slider_range.set(value)
+        if value is not None:
+            self._slider_range.set(value)
 
         @self._slider_range.connect
         def on_vrange(i, j):
@@ -802,7 +805,7 @@ if __name__ == '__main__':
     m = Model(eid, probe_id, probe_idx=0, one=one)
 
     # Create the Datoviz view.
-    c = canvas(width=1200, height=800, show_fps=False)
+    c = canvas(width=1200*2, height=800*2, show_fps=False)
     scene = c.scene(rows=2, cols=2)
 
     # Panels.
