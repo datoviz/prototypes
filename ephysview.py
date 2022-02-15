@@ -95,7 +95,6 @@ CMIN = -.0001
 CMAX = .00008
 
 
-
 @memory.cache
 def _load_spikes(eid, probe_idx=0, fs=3e4):
     one = ONE()
@@ -193,6 +192,9 @@ class Model:
         r, rl, rc = _load_brain_regions(eid, probe_idx)
         self.regions = Bunch(r=r, rl=rl, rc=rc)
 
+        # channels['rawInd'] = np.arange(n_chan)
+        # spikes['rawInd'] = channels['rawInd'][clusters['channels'][spikes['clusters']]]
+
     # return tuple (info, array)
     def _download_chunk(self, chunk_idx):
         # url_cbin, url_ch = get_data_urls(eid, probe_idx=probe_idx, one=self.one)
@@ -202,7 +204,8 @@ class Model:
         try:
             sr, t0 = stream(self.probe_id, chunk_idx, nsecs=1, one=self.one)
         except BaseException as e:
-            print(f'PID {probe_id} : recording shorter than {int(chunk_idx / 60.0)} min')
+            print(
+                f'PID {probe_id} : recording shorter than {int(chunk_idx / 60.0)} min')
             return
         raw = sr[:, :-1].T
         self.fs = sr.fs
@@ -411,7 +414,7 @@ class EphysView:
         if self.v_spikes is None:
             self.v_spikes = self.panel.visual('marker')
             self.v_spikes.data('ms', np.array([20]))
-            # self.v_spikes.data('marker', np.array([5]))  # HACK: cross marker
+            self.v_spikes.data('marker', np.array([5]))  # HACK: cross marker
         p = np.zeros((n, 3))
         p[:, 0] = times
         p[:, 1] = depths
@@ -429,7 +432,8 @@ class EphysView:
         self.alpha = alpha
         self._set_colors(colors)
         self.v_spikes.data('color', colors)
-        self.v_spikes.data('color', np.array([0, 0, 0, alpha], dtype=np.float32), idx=1)
+        self.v_spikes.data('color', np.array(
+            [0, 0, 0, alpha], dtype=np.float32), idx=1)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -559,8 +563,6 @@ class Controller:
         # Update the image.
         self.img = img
         self.ev.set_image(self.img)
-
-        # self.ev.hide_line()
 
     def update_ephys_view(self):
         self.set_range(self.t0, self.t1)
@@ -707,8 +709,8 @@ class GUI:
         # Slider controlling the imshow value range.
         self._slider_range = self._gui.control(
             'slider_float2', 'vrange', vmin=vmin, vmax=vmax)
-        # if value is not None:
-        #     self._slider_range.set(value)
+        if value is not None:
+            self._slider_range.set(value)
 
         @self._slider_range.connect
         def on_vrange(i, j):
@@ -802,7 +804,7 @@ if __name__ == '__main__':
     m = Model(eid, probe_id, probe_idx=0, one=one)
 
     # Create the Datoviz view.
-    c = canvas(width=1200, height=800, show_fps=False)
+    c = canvas(width=1200*2, height=800*2, show_fps=False)
     scene = c.scene(rows=2, cols=2)
 
     # Panels.
