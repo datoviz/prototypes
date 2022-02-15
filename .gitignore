@@ -1,0 +1,6 @@
+*.png
+*.np*
+.ipynb_checkpoints
+__pycache__
+joblib
+*~
