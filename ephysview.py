@@ -95,7 +95,6 @@ CMIN = -.0001
 CMAX = .00008
 
 
-
 @memory.cache
 def _load_spikes(eid, probe_idx=0, fs=3e4):
     one = ONE()
@@ -205,7 +204,8 @@ class Model:
         try:
             sr, t0 = stream(self.probe_id, chunk_idx, nsecs=1, one=self.one)
         except BaseException as e:
-            print(f'PID {probe_id} : recording shorter than {int(chunk_idx / 60.0)} min')
+            print(
+                f'PID {probe_id} : recording shorter than {int(chunk_idx / 60.0)} min')
             return
         raw = sr[:, :-1].T
         self.fs = sr.fs
@@ -432,7 +432,8 @@ class EphysView:
         self.alpha = alpha
         self._set_colors(colors)
         self.v_spikes.data('color', colors)
-        self.v_spikes.data('color', np.array([0, 0, 0, alpha], dtype=np.float32), idx=1)
+        self.v_spikes.data('color', np.array(
+            [0, 0, 0, alpha], dtype=np.float32), idx=1)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -562,8 +563,6 @@ class Controller:
         # Update the image.
         self.img = img
         self.ev.set_image(self.img)
-
-        # self.ev.hide_line()
 
     def update_ephys_view(self):
         self.set_range(self.t0, self.t1)
