@@ -42,6 +42,12 @@ def get_img(eid, time=0):
     return arr
 
 
+@app.route('/')
+@cross_origin(supports_credentials=True)
+def main():
+    return app.send_static_file('index.html')
+
+
 @app.route('/<eid>/')
 @cross_origin(supports_credentials=True)
 def serve_default(eid):
