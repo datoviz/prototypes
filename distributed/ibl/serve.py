@@ -95,8 +95,13 @@ def get_array(data):
         assert n > 0
         assert n <= spike_times.size
 
-        arr = np.zeros(
-            n, dtype=[('pos', np.float32, 3), ('color', np.uint8, 4), ('size', np.float32)])
+        arr = np.zeros(n, dtype=[
+            ('pos', np.float32, 2),
+            ('depth', np.uint8),
+            ('cmap_val', np.uint8),
+            ('alpha', np.uint8),
+            ('size', np.uint8)
+        ])
 
         x = normalize(spike_times[:n])
         y = normalize(spike_depths[:n])
@@ -104,14 +109,9 @@ def get_array(data):
         arr["pos"][:, 0] = x
         arr["pos"][:, 1] = y
 
-        arr["size"][:] = 1
-
-        v = 64
-        a = 64
-        arr['color'][:, 0] = v
-        arr['color'][:, 1] = v
-        arr['color'][:, 2] = v
-        arr['color'][:, 3] = a
+        arr["cmap_val"][:] = np.linspace(0, 255, n).astype(np.uint8)
+        arr["alpha"][:] = 255
+        arr["size"][:] = 10
 
         return arr
 

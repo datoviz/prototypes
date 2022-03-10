@@ -131,7 +131,7 @@
                         "flags": 0,
                         "content": {
                             "board": 1,
-                            "type": 1
+                            "type": 7
                         }
                     },
 
@@ -199,6 +199,40 @@
                             "data": {
                                 "mode": "base64",
                                 "buffer": "AAAAAAAAAAAAAEhEAAAWRAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAwAAWAIAAAAAAAAAAAAAIAMAAFgCAAAAAAAAAAAAAAAAAAAAAAAA"
+                            }
+                        }
+                    },
+
+
+                    // Params: 12
+                    {
+                        "action": "create",
+                        "type": "dat",
+                        "id": 12,
+                        "content": {
+                            "type": 5,
+                            "size": 20
+                        }
+                    },
+                    {
+                        "action": "bind",
+                        "type": "dat",
+                        "id": 2,
+                        "content": {
+                            "dat": 12,
+                            "slot_idx": 2,
+                        }
+                    },
+                    {
+                        "action": "upload",
+                        "type": "dat",
+                        "id": 12,
+                        "content": {
+                            "offset": 0,
+                            "size": 20,
+                            "data": {
+                                "mode": "base64",
+                                "buffer": getParams()
                             }
                         }
                     },
@@ -458,6 +492,21 @@
             arr.set(0, "time", [0]);
 
             return arr;
+        }
+
+        // Return a MVP structure for a given pan and zoom.
+        function getParams() {
+            var arr = new StructArray(1, [
+                ["alpha_range", "float32", 2],
+                ["size_range", "float32", 2],
+                ["cmap_id", "uint32", 1],
+            ]);
+
+            arr.set(0, "alpha_range", [0, 1]);
+            arr.set(0, "size_range", [1, 10]);
+            arr.set(0, "cmap_id", [1]);
+
+            return arr.b64();
         }
 
         // Send the updated MVP struct to the server.
