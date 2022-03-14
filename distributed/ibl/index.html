@@ -434,6 +434,8 @@
 
         // Send requests to the server.
         function submit(contents) {
+            if (!window.websocket) return;
+            if (window.websocket.readyState != 1) return;
             window.websocket.send(JSON.stringify(contents));
         }
 
@@ -445,40 +447,34 @@
             img.src = url;
         }
 
-        // Append a list item for a session.
-        function appendSession(uri) {
-            const ul = document.getElementById('ul');
-            const li = document.createElement('li');
-            const button = document.createElement('button');
-            button.setAttribute('onclick', "select(\"" + uri + "\");");
-            button.textContent = uri;
-            li.appendChild(button);
-            ul.appendChild(li);
+        function initSlider(id, range) {
+            noUiSlider.create(document.getElementById(id), {
+                start: range,
+                connect: true,
+                range: {
+                    'min': range[0],
+                    'max': range[1]
+                },
+                tooltips: true,
+            });
+        };
+
+        function onSliderChange(id, callback) {
+            document.getElementById(id).noUiSlider.on('update',
+                function (values, handle, unencoded, tap, positions, noUiSlider) {
+                    min = parseFloat(values[0]);
+                    max = parseFloat(values[1]);
+                    callback(min, max);
+                });
         }
 
         // On load, create the websocket and set the onnopen, onmessage, and onclose callbacks.
         function load() {
 
-            noUiSlider.create(document.getElementById('sliderAlpha'), {
-                start: [0, 1],
-                connect: true,
-                range: {
-                    'min': 0,
-                    'max': 1
-                },
-                tooltips: true,
-            });
+            initSlider('sliderAlpha', [0, 1]);
+            initSlider('sliderSize', [0, 20]);
+            initSlider('sliderColormap', [0, 1]);
 
-            noUiSlider.create(document.getElementById('sliderSize'), {
-                start: [0, 20],
-                connect: true,
-                range: {
-                    'min': 0,
-                    'max': 20
-                },
-                tooltips: true,
-            });
-            return;
 
             window.websocket = new WebSocket("ws://localhost:1234/");
             window.websocket.binaryType = "arraybuffer";
@@ -504,10 +500,10 @@
 
 
 
-            // Create the session list.
-            for (uri in SESSIONS) {
-                appendSession(uri);
-            }
+            // // Create the session list.
+            // for (uri in SESSIONS) {
+            //     appendSession(uri);
+            // }
 
 
 
@@ -520,9 +516,13 @@
                 e.preventDefault();
                 let d = -e.deltaY / Math.abs(e.deltaY);
                 let z = window.zoom;
-                let x = e.clientX;
-                let y = e.clientY;
+
+                var rect = e.target.getBoundingClientRect();
+                var x = e.clientX - rect.left; //x position within the element.
+                var y = e.clientY - rect.top;  //y position within the element.
+
                 let w = e.srcElement.width;
+                console.log(e);
 
                 window.zoom *= (1 + .5 * d);
                 window.zoom = Math.max(1, window.zoom);
@@ -540,15 +540,12 @@
 
 
 
-            const markerSizeSlider = document.getElementById('markerSize');
-
-            markerSizeSlider.addEventListener('input', function (e) {
-                const ms = e.target.value;
-
+            // const markerSizeSlider = document.getElementById('markerSize');
+            onSliderChange('sliderColormap', function (min, max) {
                 var arr = new StructArray(1, [
-                    ["marker_size", "float32", 1],
+                    ["cmap_range", "float32", 2],
                 ]);
-                arr.set(0, "marker_size", [ms]);
+                arr.set(0, "cmap_range", [min, max]);
 
                 const req = {
                     "version": "1.0",
@@ -556,9 +553,9 @@
                         {
                             "action": "upload",
                             "type": "dat",
-                            "id": 3, // TODO
+                            "id": 12,
                             "content": {
-                                "offset": 0,
+                                "offset": 16,
                                 "data": {
                                     "mode": "base64",
                                     "buffer": arr.b64()
@@ -570,7 +567,6 @@
                 console.log(req);
 
                 submit(req);
-
             });
 
         }
@@ -618,12 +614,14 @@
             var arr = new StructArray(1, [
                 ["alpha_range", "float32", 2],
                 ["size_range", "float32", 2],
+                ["cmap_range", "float32", 2],
                 ["cmap_id", "uint32", 1],
             ]);
 
             arr.set(0, "alpha_range", [0, 1]);
             arr.set(0, "size_range", [1, 10]);
-            arr.set(0, "cmap_id", [1]);
+            arr.set(0, "cmap_range", [0, 1]);
+            arr.set(0, "cmap_id", [0]);
 
             return arr.b64();
         }
@@ -726,6 +724,12 @@
                                 </select>
                             </li>
 
+                            <!-- Select colormap range -->
+                            <li>
+                                <label for="sliderColormap">colormap range</label>
+                                <div id="sliderColormap"></div>
+                            </li>
+
                             <!-- Select alpha range -->
                             <li>
                                 <label for="sliderAlpha">alpha</label>
@@ -746,25 +750,12 @@
 
                     <div>
                         <img id="img" />
-                        <!-- <br>
-                    <button onclick="reset();" style="width: 100%; height: 30px; margin: 1px;">Reset</button>
-                    <br>
-                    <label for="markerSize">Marker size</label>
-                    <input type="range" id="markerSize" name="marker_size" min="0.1" max="10" value="1" step="0.1"
-                        style="width: 800px;"> -->
                     </div>
 
                 </div>
             </div>
         </form>
     </div>
-
-    <!--  -->
-
-    <!--
-
-    <ul id="ul">
-    </ul> -->
 
 </body>
 
