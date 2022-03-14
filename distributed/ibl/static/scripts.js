@@ -6,8 +6,13 @@
 const COUNT = 2000000; // max number of spikes
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
 
+window.zoom = 1;
+window.shift = 0;
+
 window.sizeMin = 0.01;
 window.sizeMax = 1;
+
+window.websocket = null;
 
 
 
@@ -225,7 +230,7 @@ function loadJSON() {
                     "size": 20,
                     "data": {
                         "mode": "base64",
-                        "buffer": getParams()
+                        "buffer": paramsData()
                     }
                 }
             },
@@ -335,6 +340,7 @@ function changeSession(eid) {
 function submit(contents) {
     if (!window.websocket) return;
     if (!window.websocket.connected) return;
+    console.log("submit", contents);
     window.websocket.emit("request", contents);
 }
 
@@ -343,7 +349,7 @@ submit = throttle(submit, 100);
 
 
 /*************************************************************************************************/
-/*  Pan and zoom                                                                                 */
+/*  Uniform buffers                                                                              */
 /*************************************************************************************************/
 
 // Return a MVP structure for a given pan and zoom.
@@ -378,6 +384,25 @@ function mvpData(px, py, zx, zy) {
 
 
 
+// Return a MVP structure for a given pan and zoom.
+function paramsData() {
+    var arr = new StructArray(1, [
+        ["alpha_range", "float32", 2],
+        ["size_range", "float32", 2],
+        ["cmap_range", "float32", 2],
+        ["cmap_id", "uint32", 1],
+    ]);
+
+    arr.set(0, "alpha_range", [0, 1]);
+    arr.set(0, "size_range", [.01, 1]);
+    arr.set(0, "cmap_range", [0, 1]);
+    arr.set(0, "cmap_id", [0]);
+
+    return arr.b64();
+}
+
+
+
 function sizeRangeData() {
     var arr = new StructArray(1, [
         ["size_range", "float32", 2],
@@ -389,8 +414,40 @@ function sizeRangeData() {
 
 
 
+function rangeData(min, max) {
+    var arr = new StructArray(1, [
+        ["var", "float32", 2],
+    ]);
+    arr.set(0, "var", [min, max]);
+    return arr.b64();
+}
+
+
+
+function paramsUpdateRequest(offset, buffer) {
+    return {
+        "version": "1.0",
+        "requests": [
+            {
+                "action": "upload",
+                "type": "dat",
+                "id": 12,
+                "content": {
+                    "offset": offset,
+                    "data": {
+                        "mode": "base64",
+                        "buffer": buffer
+                    }
+                }
+            },
+        ]
+    };
+}
+
+
+
 // Send the updated MVP struct to the server.
-function updateMVP() {
+function updateUniforms() {
     const req = {
         "version": "1.0",
         "requests": [
@@ -409,18 +466,7 @@ function updateMVP() {
             },
 
             // Change the size range data in the uniform params.
-            {
-                "action": "upload",
-                "type": "dat",
-                "id": 12,
-                "content": {
-                    "offset": 8,
-                    "data": {
-                        "mode": "base64",
-                        "buffer": sizeRangeData()
-                    }
-                }
-            },
+            paramsUpdateRequest(8, sizeRangeData())["requests"][0]
         ]
     };
 
@@ -433,191 +479,48 @@ function updateMVP() {
 function reset() {
     window.zoom = 1;
     window.shift = 0;
-    updateMVP();
+    updateUniforms();
 }
 
 
 
 /*************************************************************************************************/
-/*  Raster uniform buffer                                                                        */
+/*  Setup functions                                                                              */
 /*************************************************************************************************/
 
-// Return a MVP structure for a given pan and zoom.
-function getParams() {
-    var arr = new StructArray(1, [
-        ["alpha_range", "float32", 2],
-        ["size_range", "float32", 2],
-        ["cmap_range", "float32", 2],
-        ["cmap_id", "uint32", 1],
-    ]);
-
-    arr.set(0, "alpha_range", [0, 1]);
-    arr.set(0, "size_range", [.01, 1]);
-    arr.set(0, "cmap_range", [0, 1]);
-    arr.set(0, "cmap_id", [0]);
-
-    return arr.b64();
-}
-
-
-
-/*************************************************************************************************/
-/*  Entry point                                                                                  */
-/*************************************************************************************************/
-
-// On load, create the websocket and set the onnopen, onmessage, and onclose callbacks.
-function load() {
+function setupSliders() {
 
     initSlider('sliderAlpha', [0, 1], [0, 1]);
-    initSlider('sliderSize', [0.01, 1], [0, 5]);
-    initSlider('sliderColormap', [0, 1], [0, 1]);
-
-
-    window.websocket = io();
-
-    // window.websocket = new WebSocket("ws://localhost:5000/");
-    // window.websocket.binaryType = "arraybuffer";
-
-    // window.websocket.onopen = function () {
-    window.websocket.on("connect", () => {
-        console.log('socket connected');
-
-        var contents = loadJSON();
-        submit(contents);
-    });
-
-    // window.websocket.onmessage = ({ data }) => {
-    window.websocket.on("image", (data) => {
-        // display the received image
-        let img = data["image"];
-        if (img instanceof ArrayBuffer) {
-            show(img);
-        }
-    });
-
-    // window.websocket.onclose = function () {
-    window.websocket.on("disconnect", () => {
-        console.log('socket disconnected');
-    });
-
-
-
-
-    window.zoom = 1;
-    window.shift = 0;
-
-    const img = document.getElementById('img');
-
-    img.onwheel = function (e) {
-        e.preventDefault();
-        let d = -e.deltaY / Math.abs(e.deltaY);
-        let z = window.zoom;
-
-        var rect = e.target.getBoundingClientRect();
-        var x = e.clientX - rect.left; //x position within the element.
-        var y = e.clientY - rect.top;  //y position within the element.
-
-        let w = e.srcElement.width;
-
-        window.zoom *= (1 + .5 * d);
-        window.zoom = Math.max(1, window.zoom);
-
-        let center = -1 + 2 * x / w;
-        window.shift -= center * (1 / z - 1 / window.zoom);
-
-        if (window.zoom != z)
-            updateMVP();
-    }
-
-    img.ondblclick = function (e) {
-        reset();
-    }
-
-
-
-    onSliderChange('sliderColormap', function (min, max) {
-        var arr = new StructArray(1, [
-            ["cmap_range", "float32", 2],
-        ]);
-        arr.set(0, "cmap_range", [min, max]);
-
-        const req = {
-            "version": "1.0",
-            "requests": [
-                {
-                    "action": "upload",
-                    "type": "dat",
-                    "id": 12,
-                    "content": {
-                        "offset": 16,
-                        "data": {
-                            "mode": "base64",
-                            "buffer": arr.b64()
-                        }
-                    }
-                },
-            ]
-        };
-
-        submit(req);
-    });
-
-    onSliderChange('sliderSize', function (min, max) {
-        var arr = new StructArray(1, [
-            ["size_range", "float32", 2],
-        ]);
-        window.sizeMin = min;
-        window.sizeMax = max;
-        arr.set(0, "size_range", [min, max * scaleSize(window.zoom)]);
-
-        const req = {
-            "version": "1.0",
-            "requests": [
-                {
-                    "action": "upload",
-                    "type": "dat",
-                    "id": 12,
-                    "content": {
-                        "offset": 8,
-                        "data": {
-                            "mode": "base64",
-                            "buffer": arr.b64()
-                        }
-                    }
-                },
-            ]
-        };
-
-        submit(req);
-    });
 
     onSliderChange('sliderAlpha', function (min, max) {
-        var arr = new StructArray(1, [
-            ["alpha_range", "float32", 2],
-        ]);
-        arr.set(0, "alpha_range", [min, max]);
-
-        const req = {
-            "version": "1.0",
-            "requests": [
-                {
-                    "action": "upload",
-                    "type": "dat",
-                    "id": 12,
-                    "content": {
-                        "offset": 0,
-                        "data": {
-                            "mode": "base64",
-                            "buffer": arr.b64()
-                        }
-                    }
-                },
-            ]
-        };
-
+        const req = paramsUpdateRequest(0, rangeData(min, max));
         submit(req);
     });
 
+
+
+    initSlider('sliderSize', [0.01, 1], [0, 5]);
+
+    onSliderChange('sliderSize', function (min, max) {
+        window.sizeMin = min;
+        window.sizeMax = max;
+        const req = paramsUpdateRequest(8, sizeRangeData());
+        submit(req);
+    });
+
+
+
+    initSlider('sliderColormap', [0, 1], [0, 1]);
+
+    onSliderChange('sliderColormap', function (min, max) {
+        const req = paramsUpdateRequest(16, rangeData(min, max));
+        submit(req);
+    });
+}
+
+
+
+function setupDropdowns() {
 
     document.getElementById('selectSession').onchange = function (e) {
         changeSession(e.target.value);
@@ -682,4 +585,76 @@ function load() {
 
     }
 
+}
+
+
+
+function setupPanzoom() {
+    const img = document.getElementById('img');
+
+    img.onwheel = function (e) {
+        e.preventDefault();
+        let d = -e.deltaY / Math.abs(e.deltaY);
+        let z = window.zoom;
+
+        var rect = e.target.getBoundingClientRect();
+        var x = e.clientX - rect.left; //x position within the element.
+        var y = e.clientY - rect.top;  //y position within the element.
+
+        let w = e.target.width;
+
+        window.zoom *= (1 + .5 * d);
+        window.zoom = Math.max(1, window.zoom);
+
+        let center = -1 + 2 * x / w;
+        window.shift -= center * (1 / z - 1 / window.zoom);
+
+        if (window.zoom != z)
+            updateUniforms();
+    }
+
+    img.ondblclick = function (e) {
+        reset();
+    }
+}
+
+
+
+function setupWebsocket() {
+    window.websocket = io();
+
+    window.websocket.on("connect", () => {
+        console.log('socket connected');
+
+        var contents = loadJSON();
+        submit(contents);
+    });
+
+    window.websocket.on("image", (data) => {
+        // display the received image
+        let img = data["image"];
+        if (img instanceof ArrayBuffer) {
+            show(img);
+        }
+    });
+
+    window.websocket.on("disconnect", () => {
+        console.log('socket disconnected');
+    });
+}
+
+
+
+/*************************************************************************************************/
+/*  Entry point                                                                                  */
+/*************************************************************************************************/
+
+// On load, create the websocket and set the onnopen, onmessage, and onclose callbacks.
+function load() {
+
+    setupSliders();
+    setupDropdowns();
+    setupPanzoom();
+
+    setupWebsocket();
 }
