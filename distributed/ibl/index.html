@@ -169,6 +169,38 @@
             return tob64(this.buffer);
         }
 
+        function throttle(func, wait, options) {
+            var context, args, result;
+            var timeout = null;
+            var previous = 0;
+            if (!options) options = {};
+            var later = function () {
+                previous = options.leading === false ? 0 : Date.now();
+                timeout = null;
+                result = func.apply(context, args);
+                if (!timeout) context = args = null;
+            };
+            return function () {
+                var now = Date.now();
+                if (!previous && options.leading === false) previous = now;
+                var remaining = wait - (now - previous);
+                context = this;
+                args = arguments;
+                if (remaining <= 0 || remaining > wait) {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        timeout = null;
+                    }
+                    previous = now;
+                    result = func.apply(context, args);
+                    if (!timeout) context = args = null;
+                } else if (!timeout && options.trailing !== false) {
+                    timeout = setTimeout(later, remaining);
+                }
+                return result;
+            };
+        };
+
     </script>
 
     <!-- Visualization client -->
@@ -439,6 +471,8 @@
             window.websocket.send(JSON.stringify(contents));
         }
 
+        submit = throttle(submit, 100);
+
         // Display an array buffer.
         function show(arrbuf) {
             const blob = new Blob([arrbuf]);
@@ -447,13 +481,13 @@
             img.src = url;
         }
 
-        function initSlider(id, range) {
+        function initSlider(id, initRange, fullRange) {
             noUiSlider.create(document.getElementById(id), {
-                start: range,
+                start: initRange,
                 connect: true,
                 range: {
-                    'min': range[0],
-                    'max': range[1]
+                    'min': fullRange[0],
+                    'max': fullRange[1]
                 },
                 tooltips: true,
             });
@@ -471,9 +505,9 @@
         // On load, create the websocket and set the onnopen, onmessage, and onclose callbacks.
         function load() {
 
-            initSlider('sliderAlpha', [0, 1]);
-            initSlider('sliderSize', [0, 20]);
-            initSlider('sliderColormap', [0, 1]);
+            initSlider('sliderAlpha', [0, 1], [0, 1]);
+            initSlider('sliderSize', [0.01, 1], [0, 5]);
+            initSlider('sliderColormap', [0, 1], [0, 1]);
 
 
             window.websocket = new WebSocket("ws://localhost:1234/");
@@ -540,7 +574,6 @@
 
 
 
-            // const markerSizeSlider = document.getElementById('markerSize');
             onSliderChange('sliderColormap', function (min, max) {
                 var arr = new StructArray(1, [
                     ["cmap_range", "float32", 2],
@@ -564,7 +597,60 @@
                         },
                     ]
                 };
-                console.log(req);
+
+                submit(req);
+            });
+
+            onSliderChange('sliderSize', function (min, max) {
+                var arr = new StructArray(1, [
+                    ["size_range", "float32", 2],
+                ]);
+                arr.set(0, "size_range", [min, max]);
+
+                const req = {
+                    "version": "1.0",
+                    "requests": [
+                        {
+                            "action": "upload",
+                            "type": "dat",
+                            "id": 12,
+                            "content": {
+                                "offset": 8,
+                                "data": {
+                                    "mode": "base64",
+                                    "buffer": arr.b64()
+                                }
+                            }
+                        },
+                    ]
+                };
+
+                submit(req);
+            });
+
+            onSliderChange('sliderAlpha', function (min, max) {
+                var arr = new StructArray(1, [
+                    ["alpha_range", "float32", 2],
+                ]);
+                arr.set(0, "alpha_range", [min, max]);
+
+                const req = {
+                    "version": "1.0",
+                    "requests": [
+                        {
+                            "action": "upload",
+                            "type": "dat",
+                            "id": 12,
+                            "content": {
+                                "offset": 0,
+                                "data": {
+                                    "mode": "base64",
+                                    "buffer": arr.b64()
+                                }
+                            }
+                        },
+                    ]
+                };
 
                 submit(req);
             });
@@ -619,7 +705,7 @@
             ]);
 
             arr.set(0, "alpha_range", [0, 1]);
-            arr.set(0, "size_range", [1, 10]);
+            arr.set(0, "size_range", [.01, 1]);
             arr.set(0, "cmap_range", [0, 1]);
             arr.set(0, "cmap_id", [0]);
 
@@ -732,13 +818,13 @@
 
                             <!-- Select alpha range -->
                             <li>
-                                <label for="sliderAlpha">alpha</label>
+                                <label for="sliderAlpha">alpha range</label>
                                 <div id="sliderAlpha"></div>
                             </li>
 
                             <!-- Select size range -->
                             <li>
-                                <label for="sliderSize">size</label>
+                                <label for="sliderSize">size range</label>
                                 <div id="sliderSize"></div>
                             </li>
                         </ol>

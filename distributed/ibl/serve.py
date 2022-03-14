@@ -111,7 +111,7 @@ def get_array(data):
 
         arr["cmap_val"][:] = np.linspace(0, 255, n).astype(np.uint8)
         arr["alpha"][:] = 255
-        arr["size"][:] = 10
+        arr["size"][:] = 255
 
         return arr
 
