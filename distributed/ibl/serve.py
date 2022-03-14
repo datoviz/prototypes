@@ -59,6 +59,15 @@ def normalize(x):
     return -1 + 2 * (x - m) / (M - m)
 
 
+def normalize_uint8(x):
+    m = x.min()
+    M = x.max()
+    if m == M:
+        logger.warning("degenerate values")
+        M = m + 1
+    return np.round(255 * (x - m) / (M - m)).astype(np.uint8)
+
+
 def get_array(data):
     if data.mode == 'base64':
         r = base64.decodebytes(data.buffer.encode('ascii'))
@@ -87,6 +96,8 @@ def get_array(data):
             download(data.session['uri'] + data.session['spikes']['times']))
         spike_depths = np.load(
             download(data.session['uri'] + data.session['spikes']['depths']))
+        spike_clusters = np.load(
+            download(data.session['uri'] + data.session['spikes']['clusters']))
         spike_depths[np.isnan(spike_depths)] = 0
 
         logger.debug(f"downloaded {len(spike_times)} spikes")
@@ -109,7 +120,16 @@ def get_array(data):
         arr["pos"][:, 0] = x
         arr["pos"][:, 1] = y
 
-        arr["cmap_val"][:] = np.linspace(0, 255, n).astype(np.uint8)
+        fet_color = data.get('features', {}).get('color', 'time')
+
+        if fet_color == 'time':
+            color = normalize_uint8(spike_times[:n])
+        elif fet_color == 'cluster':
+            color = normalize_uint8(spike_clusters[:n])
+        elif fet_color == 'depth':
+            color = normalize_uint8(spike_depths[:n])
+
+        arr["cmap_val"][:] = color
         arr["alpha"][:] = 255
         arr["size"][:] = 255
 

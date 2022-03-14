@@ -560,7 +560,6 @@
                 var y = e.clientY - rect.top;  //y position within the element.
 
                 let w = e.srcElement.width;
-                console.log(e);
 
                 window.zoom *= (1 + .5 * d);
                 window.zoom = Math.max(1, window.zoom);
@@ -664,6 +663,65 @@
 
             document.getElementById('selectSession').onchange = function (e) {
                 select(e.target.value);
+            }
+
+            document.getElementById('selectColormap').onchange = function (e) {
+                var cmap_id = parseInt(e.target.value);
+
+                var arr = new StructArray(1, [
+                    ["cmap_id", "uint32", 1],
+                ]);
+                arr.set(0, "cmap_id", [cmap_id]);
+
+                const req = {
+                    "version": "1.0",
+                    "requests": [
+                        {
+                            "action": "upload",
+                            "type": "dat",
+                            "id": 12,
+                            "content": {
+                                "offset": 24,
+                                "data": {
+                                    "mode": "base64",
+                                    "buffer": arr.b64()
+                                }
+                            }
+                        },
+                    ]
+                };
+
+                submit(req);
+            }
+
+            document.getElementById('selectColor').onchange = function (e) {
+                var feature = e.target.value;
+
+                const req = {
+                    "version": "1.0",
+                    "requests": [
+                        {
+                            "action": "upload",
+                            "type": "dat",
+                            "id": 3,
+                            "content": {
+                                "offset": 0,
+                                "data": {
+                                    "mode": "ibl_ephys",
+                                    "count": COUNT,
+                                    "session": sessionJSON(DEFAULT_URI),
+                                    "features": {
+                                        "color": feature
+                                    }
+                                }
+                            }
+                        },
+                    ]
+                };
+
+                submit(req);
+
+
             }
 
         }
@@ -815,6 +873,7 @@
                                 <select id="selectColor" class="u-full-width">
                                     <option value="time">time</option>
                                     <option value="cluster">cluster</option>
+                                    <option value="depth">depth</option>
                                 </select>
                             </li>
 
@@ -844,7 +903,12 @@
                             <li>
                                 <label for="selectColormap">colormap</label>
                                 <select id="selectColormap" class="u-full-width">
-                                    <option value="hsv">hsv</option>
+                                    <option value="0">binary</option>
+                                    <option value="1">hsv</option>
+                                    <option value="6">viridis</option>
+                                    <option value="27">cool</option>
+                                    <option value="31">hot</option>
+                                    <option value="61">jet</option>
                                 </select>
                             </li>
 
