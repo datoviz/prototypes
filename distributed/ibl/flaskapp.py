@@ -2,35 +2,48 @@
 # Imports
 # -------------------------------------------------------------------------------------------------
 
-import asyncio
 import base64
-import sys
 from pathlib import Path
-import json
 import logging
 import io
-from pprint import pprint
-import urllib.request
 import traceback
 
-from joblib import Memory
 import numpy as np
-# import websockets
 
-from flask import Flask, send_file, render_template
-# from flask_cors import CORS, cross_origin
-from flask_socketio import SocketIO, send, emit
+from flask import Flask, render_template
+from flask_socketio import SocketIO, emit
 
 from datoviz import Requester, Renderer
 
 
+# -------------------------------------------------------------------------------------------------
+# Logger
+# -------------------------------------------------------------------------------------------------
+
 logger = logging.getLogger('datoviz')
 
+
+# -------------------------------------------------------------------------------------------------
+# Utils
+# -------------------------------------------------------------------------------------------------
 
 class Bunch(dict):
     def __init__(self, *args, **kwargs):
         self.__dict__ = self
         super().__init__(*args, **kwargs)
+
+
+def normalize(x, target='float'):
+    m = x.min()
+    M = x.max()
+    if m == M:
+        # logger.warning("degenerate values")
+        m = M - 1
+    if target == 'float':  # normalize in [-1, +1]
+        return -1 + 2 * (x - m) / (M - m)
+    elif target == 'uint8':  # normalize in [0, 255]
+        return np.round(255 * (x - m) / (M - m)).astype(np.uint8)
+    raise ValueError("unknow normalization target")
 
 
 # -------------------------------------------------------------------------------------------------
@@ -48,60 +61,17 @@ HEIGHT = 600
 # Data access
 # -------------------------------------------------------------------------------------------------
 
-MEMORY = Memory(".")
-
-
-@MEMORY.cache
-def download(url):
-    with urllib.request.urlopen(url) as f:
-        return io.BytesIO(f.read())
-
-
-def normalize(x):
-    m = x.min()
-    M = x.max()
-    if m == M:
-        logger.warning("degenerate values")
-        M = m + 1
-    return -1 + 2 * (x - m) / (M - m)
-
-
-def normalize_uint8(x):
-    m = x.min()
-    M = x.max()
-    if m == M:
-        logger.warning("degenerate values")
-        M = m + 1
-    return np.round(255 * (x - m) / (M - m)).astype(np.uint8)
-
-
 def get_array(data):
     if data.mode == 'base64':
         r = base64.decodebytes(data.buffer.encode('ascii'))
         return np.frombuffer(r, dtype=np.uint8)
-    elif data.mode == 'random':
-        n = data.count
-        assert n > 0
-        arr = np.zeros(
-            n, dtype=[('pos', np.float32, 3), ('color', np.uint8, 4)])
-        assert arr.itemsize == 16
-
-        if data.dist == 'uniform2D':
-            pos = np.random.uniform(size=(n, 2))
-        elif data.dist == 'normal2D':
-            pos = .25 * np.random.normal(size=(n, 2))
-
-        arr['pos'][:, :2] = pos
-
-        color = np.random.uniform(size=(n, 3), low=128, high=240)
-        arr['color'][:, :3] = color
-        arr['color'][:, 3] = 128
-        return arr
     elif data.mode == 'ibl_ephys':
 
+        # Retrieve the requested session eid.
         eid = data.session['eid']
         session_dir = DATA_DIR / eid
 
+        # Load the data.
         spike_times = np.load(session_dir / 'spikes.times.npy')
         spike_depths = np.load(session_dir / 'spikes.depths.npy')
         spike_clusters = np.load(session_dir / 'spikes.clusters.npy')
@@ -111,10 +81,12 @@ def get_array(data):
 
         logger.debug(f"downloaded {len(spike_times)} spikes")
 
+        # HACK: maximum data size
         n = data.count
         assert n > 0
         assert n <= spike_times.size
 
+        # Prepare the vertex buffer for the raster graphics.
         arr = np.zeros(n, dtype=[
             ('pos', np.float32, 2),
             ('depth', np.uint8),
@@ -123,26 +95,35 @@ def get_array(data):
             ('size', np.uint8)
         ])
 
+        # Generate the position data.
         x = normalize(spike_times[:n])
         y = normalize(spike_depths[:n])
-
         arr["pos"][:, 0] = x
         arr["pos"][:, 1] = y
 
-        fet_color = data.get('features', {}).get('color', 'time')
+        features = {
+            'time': spike_times[:n],
+            'cluster': spike_clusters[:n],
+            'depth': spike_depths[:n],
+            'amplitude': spike_amps[:n],
+            None: np.ones(n),
+        }
 
-        if fet_color == 'time':
-            color = normalize_uint8(spike_times[:n])
-        elif fet_color == 'cluster':
-            color = normalize_uint8(spike_clusters[:n])
-        elif fet_color == 'depth':
-            color = normalize_uint8(spike_depths[:n])
-        elif fet_color == 'amplitude':
-            color = normalize_uint8(spike_amps[:n])
+        reqfet = data.get('features', {})
 
-        arr["cmap_val"][:] = color
-        arr["alpha"][:] = 255
-        arr["size"][:] = 255
+        # Color feature.
+        fet_color = reqfet.get('color', None)
+        arr["cmap_val"][:] = normalize(features[fet_color], target='uint8')
+
+        # Alpha feature.
+        fet_alpha = reqfet.get('alpha', None)
+        arr["alpha"][:] = normalize(features[fet_alpha], target='uint8')
+
+        # Size feature.
+        fet_size = reqfet.get('size', None)
+        arr["size"][:] = normalize(features[fet_size], target='uint8')
+
+        print(arr)
 
         return arr
 
@@ -203,7 +184,6 @@ def render(rnd, board_id=1):
 
 app = Flask(__name__)
 socketio = SocketIO(app)
-# CORS(app, support_credentials=True)
 
 
 def get_sessions():
@@ -212,7 +192,6 @@ def get_sessions():
 
 
 @app.route('/')
-# @cross_origin(supports_credentials=True)
 def main():
     return render_template('index.html', sessions=get_sessions())
 
@@ -228,12 +207,9 @@ def test_connect():
 @socketio.on('request')
 def on_request(msg):
     try:
-        # msg = await websocket.recv()
-        # msg = json.loads(msg)
         process(rnd, msg['requests'])
         # TODO: board id
         img = render(rnd, 1)  # msg['render'])
-        # # await websocket.send(img)
         emit('image', {"image": img.getvalue()})
     except Exception as e:
         logger.error(traceback.format_exc())
