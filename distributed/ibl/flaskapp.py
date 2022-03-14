@@ -10,8 +10,8 @@ import traceback
 
 import numpy as np
 
-from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
+from flask import Flask, render_template, session
+from flask_socketio import SocketIO, Namespace, emit
 
 from datoviz import Requester, Renderer
 
@@ -184,6 +184,10 @@ app = Flask(__name__)
 socketio = SocketIO(app)
 
 
+# -------------------------------------------------------------------------------------------------
+# Serving the HTML page
+# -------------------------------------------------------------------------------------------------
+
 def get_sessions():
     for session in sorted(DATA_DIR.iterdir()):
         yield session.name
@@ -194,30 +198,32 @@ def main():
     return render_template('index.html', sessions=get_sessions())
 
 
-rnd = Renderer()
+# -------------------------------------------------------------------------------------------------
+# WebSocket server
+# -------------------------------------------------------------------------------------------------
 
+class RendererNamespace(Namespace):
+    def on_connect(self, e):
+        logger.info("Client connected")
+        session['renderer'] = Renderer()
 
-@socketio.on('connect')
-def test_connect():
-    logger.debug("Client connected")
+    def on_disconnect(self):
+        logger.info('Client disconnected')
+        session.pop('renderer', None)
 
-
-@socketio.on('request')
-def on_request(msg):
-    try:
-        process(rnd, msg['requests'])
-        # TODO: board id
-        img = render(rnd, 1)  # msg['render'])
-        emit('image', {"image": img.getvalue()})
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        return
-
-
-@socketio.on('disconnect')
-def test_disconnect():
-    logger.debug('Client disconnected')
+    def on_request(self, msg):
+        rnd = session.get('renderer', None)
+        assert rnd
+        try:
+            process(rnd, msg['requests'])
+            # TODO: board id
+            img = render(rnd, 1)  # msg['render'])
+            emit('image', {"image": img.getvalue()})
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            return
 
 
 if __name__ == '__main__':
+    socketio.on_namespace(RendererNamespace('/'))
     socketio.run(app, port=5000)
