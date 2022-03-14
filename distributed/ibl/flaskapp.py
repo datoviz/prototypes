@@ -112,18 +112,16 @@ def get_array(data):
         reqfet = data.get('features', {})
 
         # Color feature.
-        fet_color = reqfet.get('color', None)
+        fet_color = reqfet.get('color', None) or None
         arr["cmap_val"][:] = normalize(features[fet_color], target='uint8')
 
         # Alpha feature.
-        fet_alpha = reqfet.get('alpha', None)
+        fet_alpha = reqfet.get('alpha', None) or None
         arr["alpha"][:] = normalize(features[fet_alpha], target='uint8')
 
         # Size feature.
-        fet_size = reqfet.get('size', None)
+        fet_size = reqfet.get('size', None) or None
         arr["size"][:] = normalize(features[fet_size], target='uint8')
-
-        print(arr)
 
         return arr
 

@@ -424,6 +424,47 @@ function rangeData(min, max) {
 
 
 
+function cmapData(cmap_id) {
+    var arr = new StructArray(1, [
+        ["cmap_id", "uint32", 1],
+    ]);
+    arr.set(0, "cmap_id", [cmap_id]);
+    return arr.b64();
+}
+
+
+
+function colorFeatureData(name, feature) {
+    const req = {
+        "version": "1.0",
+        "requests": [
+            {
+                "action": "upload",
+                "type": "dat",
+                "id": 3,
+                "content": {
+                    "offset": 0,
+                    "data": {
+                        "mode": "ibl_ephys",
+                        "count": COUNT,
+                        "session": sessionJSON(DEFAULT_EID),
+                        "features": {
+                            [name]: feature
+                        }
+                    }
+                }
+            },
+        ]
+    };
+    return req;
+}
+
+
+
+/*************************************************************************************************/
+/*  Uniform buffer updates                                                                       */
+/*************************************************************************************************/
+
 function paramsUpdateRequest(offset, buffer) {
     return {
         "version": "1.0",
@@ -528,63 +569,15 @@ function setupDropdowns() {
 
     document.getElementById('selectColormap').onchange = function (e) {
         var cmap_id = parseInt(e.target.value);
-
-        var arr = new StructArray(1, [
-            ["cmap_id", "uint32", 1],
-        ]);
-        arr.set(0, "cmap_id", [cmap_id]);
-
-        const req = {
-            "version": "1.0",
-            "requests": [
-                {
-                    "action": "upload",
-                    "type": "dat",
-                    "id": 12,
-                    "content": {
-                        "offset": 24,
-                        "data": {
-                            "mode": "base64",
-                            "buffer": arr.b64()
-                        }
-                    }
-                },
-            ]
-        };
-
+        const req = paramsUpdateRequest(24, cmapData(cmap_id));
         submit(req);
     }
 
     document.getElementById('selectColor').onchange = function (e) {
         var feature = e.target.value;
-
-        const req = {
-            "version": "1.0",
-            "requests": [
-                {
-                    "action": "upload",
-                    "type": "dat",
-                    "id": 3,
-                    "content": {
-                        "offset": 0,
-                        "data": {
-                            "mode": "ibl_ephys",
-                            "count": COUNT,
-                            "session": sessionJSON(DEFAULT_EID),
-                            "features": {
-                                "color": feature
-                            }
-                        }
-                    }
-                },
-            ]
-        };
-
+        const req = colorFeatureData("color", feature);
         submit(req);
-
-
     }
-
 }
 
 
