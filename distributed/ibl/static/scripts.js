@@ -1,5 +1,96 @@
+
+/*************************************************************************************************/
+/*  Constants                                                                                    */
+/*************************************************************************************************/
+
 const COUNT = 2000000; // max number of spikes
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
+
+window.sizeMin = 0.01;
+window.sizeMax = 1;
+
+
+
+/*************************************************************************************************/
+/*  Utils                                                                                        */
+/*************************************************************************************************/
+
+function throttle(func, wait, options) {
+    var context, args, result;
+    var timeout = null;
+    var previous = 0;
+    if (!options) options = {};
+    var later = function () {
+        previous = options.leading === false ? 0 : Date.now();
+        timeout = null;
+        result = func.apply(context, args);
+        if (!timeout) context = args = null;
+    };
+    return function () {
+        var now = Date.now();
+        if (!previous && options.leading === false) previous = now;
+        var remaining = wait - (now - previous);
+        context = this;
+        args = arguments;
+        if (remaining <= 0 || remaining > wait) {
+            if (timeout) {
+                clearTimeout(timeout);
+                timeout = null;
+            }
+            previous = now;
+            result = func.apply(context, args);
+            if (!timeout) context = args = null;
+        } else if (!timeout && options.trailing !== false) {
+            timeout = setTimeout(later, remaining);
+        }
+        return result;
+    };
+};
+
+// Display an array buffer.
+function show(arrbuf) {
+    const blob = new Blob([arrbuf]);
+    const url = URL.createObjectURL(blob);
+    const img = document.getElementById('img');
+    img.src = url;
+}
+
+function scaleSize(x) {
+    return Math.log(1 + x);
+}
+
+
+
+/*************************************************************************************************/
+/*  Sliders                                                                                      */
+/*************************************************************************************************/
+
+function initSlider(id, initRange, fullRange) {
+    noUiSlider.create(document.getElementById(id), {
+        start: initRange,
+        connect: true,
+        range: {
+            'min': fullRange[0],
+            'max': fullRange[1]
+        },
+        tooltips: true,
+    });
+};
+
+function onSliderChange(id, callback) {
+    document.getElementById(id).noUiSlider.on('update',
+        function (values, handle, unencoded, tap, positions, noUiSlider) {
+            min = parseFloat(values[0]);
+            max = parseFloat(values[1]);
+            callback(min, max);
+        });
+}
+
+
+
+/*************************************************************************************************/
+/*  Datoviz JSON requests                                                                        */
+/*************************************************************************************************/
 
 // Data payload for a given session.
 function sessionJSON(eid) {
@@ -7,6 +98,8 @@ function sessionJSON(eid) {
         "eid": eid,
     };
 }
+
+
 
 // Load the initial JSON.
 function loadJSON() {
@@ -211,9 +304,11 @@ function loadJSON() {
     };
 }
 
-// Generate a JSON request to update to a new EID.
-function updateRequest(eid) {
-    const req = {
+
+
+// Select another session.
+function changeSession(eid) {
+    var contents = {
         "version": "1.0",
         "requests": [
             {
@@ -231,52 +326,144 @@ function updateRequest(eid) {
             },
         ]
     };
-
-    return req;
+    submit(contents);
 }
+
+
 
 // Send requests to the server.
 function submit(contents) {
     if (!window.websocket) return;
-    // if (window.websocket.readyState != 1) return;
     if (!window.websocket.connected) return;
     window.websocket.emit("request", contents);
 }
 
 submit = throttle(submit, 100);
 
-// Display an array buffer.
-function show(arrbuf) {
-    const blob = new Blob([arrbuf]);
-    const url = URL.createObjectURL(blob);
-    const img = document.getElementById('img');
-    img.src = url;
+
+
+/*************************************************************************************************/
+/*  Pan and zoom                                                                                 */
+/*************************************************************************************************/
+
+// Return a MVP structure for a given pan and zoom.
+function mvpData(px, py, zx, zy) {
+    // 3 matrices 4x4: model, view, proj, and finally time
+    var arr = new StructArray(1, [
+        ["model", "float32", 16],
+        ["view", "float32", 16],
+        ["proj", "float32", 16],
+        ["time", "float32", 1],
+    ]);
+
+    arr.set(0, "model", [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1]);
+    arr.set(0, "view", [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        px, py, -2, 1]);
+    arr.set(0, "proj", [
+        zx, 0, 0, 0,
+        0, zy, 0, 0,
+        0, 0, -0.1, 0,
+        0, 0, 0, 1]);
+    arr.set(0, "time", [0]);
+
+    return arr.b64();
 }
 
-function initSlider(id, initRange, fullRange) {
-    noUiSlider.create(document.getElementById(id), {
-        start: initRange,
-        connect: true,
-        range: {
-            'min': fullRange[0],
-            'max': fullRange[1]
-        },
-        tooltips: true,
-    });
-};
 
-function onSliderChange(id, callback) {
-    document.getElementById(id).noUiSlider.on('update',
-        function (values, handle, unencoded, tap, positions, noUiSlider) {
-            min = parseFloat(values[0]);
-            max = parseFloat(values[1]);
-            callback(min, max);
-        });
+
+function sizeRangeData() {
+    var arr = new StructArray(1, [
+        ["size_range", "float32", 2],
+    ]);
+    arr.set(0, "size_range", [window.sizeMin, window.sizeMax * scaleSize(window.zoom)]);
+
+    return arr.b64();
 }
 
-function scaleSize(x) {
-    return Math.log(1 + x);
+
+
+// Send the updated MVP struct to the server.
+function updateMVP() {
+    const req = {
+        "version": "1.0",
+        "requests": [
+            // Change the MVP matrices.
+            {
+                "action": "upload",
+                "type": "dat",
+                "id": 10,
+                "content": {
+                    "offset": 0,
+                    "data": {
+                        "mode": "base64",
+                        "buffer": mvpData(window.shift, 0, window.zoom, 1)
+                    }
+                }
+            },
+
+            // Change the size range data in the uniform params.
+            {
+                "action": "upload",
+                "type": "dat",
+                "id": 12,
+                "content": {
+                    "offset": 8,
+                    "data": {
+                        "mode": "base64",
+                        "buffer": sizeRangeData()
+                    }
+                }
+            },
+        ]
+    };
+
+    submit(req);
 }
+
+
+
+// Reset the view.
+function reset() {
+    window.zoom = 1;
+    window.shift = 0;
+    updateMVP();
+}
+
+
+
+/*************************************************************************************************/
+/*  Raster uniform buffer                                                                        */
+/*************************************************************************************************/
+
+// Return a MVP structure for a given pan and zoom.
+function getParams() {
+    var arr = new StructArray(1, [
+        ["alpha_range", "float32", 2],
+        ["size_range", "float32", 2],
+        ["cmap_range", "float32", 2],
+        ["cmap_id", "uint32", 1],
+    ]);
+
+    arr.set(0, "alpha_range", [0, 1]);
+    arr.set(0, "size_range", [.01, 1]);
+    arr.set(0, "cmap_range", [0, 1]);
+    arr.set(0, "cmap_id", [0]);
+
+    return arr.b64();
+}
+
+
+
+/*************************************************************************************************/
+/*  Entry point                                                                                  */
+/*************************************************************************************************/
 
 // On load, create the websocket and set the onnopen, onmessage, and onclose callbacks.
 function load() {
@@ -433,7 +620,7 @@ function load() {
 
 
     document.getElementById('selectSession').onchange = function (e) {
-        select(e.target.value);
+        changeSession(e.target.value);
     }
 
     document.getElementById('selectColormap').onchange = function (e) {
@@ -495,112 +682,4 @@ function load() {
 
     }
 
-}
-
-// Select another session.
-function select(eid) {
-    var contents = updateRequest(eid);
-    submit(contents);
-}
-
-window.sizeMin = 0.01;
-window.sizeMax = 1;
-
-
-// Return a MVP structure for a given pan and zoom.
-function mvp(px, py, zx, zy) {
-    // 3 matrices 4x4: model, view, proj, and finally time
-    var arr = new StructArray(1, [
-        ["model", "float32", 16],
-        ["view", "float32", 16],
-        ["proj", "float32", 16],
-        ["time", "float32", 1],
-    ]);
-
-    arr.set(0, "model", [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1]);
-    arr.set(0, "view", [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        px, py, -2, 1]);
-    arr.set(0, "proj", [
-        zx, 0, 0, 0,
-        0, zy, 0, 0,
-        0, 0, -0.1, 0,
-        0, 0, 0, 1]);
-    arr.set(0, "time", [0]);
-
-    return arr;
-}
-
-// Return a MVP structure for a given pan and zoom.
-function getParams() {
-    var arr = new StructArray(1, [
-        ["alpha_range", "float32", 2],
-        ["size_range", "float32", 2],
-        ["cmap_range", "float32", 2],
-        ["cmap_id", "uint32", 1],
-    ]);
-
-    arr.set(0, "alpha_range", [0, 1]);
-    arr.set(0, "size_range", [.01, 1]);
-    arr.set(0, "cmap_range", [0, 1]);
-    arr.set(0, "cmap_id", [0]);
-
-    return arr.b64();
-}
-
-// Send the updated MVP struct to the server.
-function updateMVP() {
-    arr = mvp(window.shift, 0, window.zoom, 1);
-
-
-    var arrs = new StructArray(1, [
-        ["size_range", "float32", 2],
-    ]);
-    arrs.set(0, "size_range", [window.sizeMin, window.sizeMax * scaleSize(window.zoom)]);
-
-    const req = {
-        "version": "1.0",
-        "requests": [
-            {
-                "action": "upload",
-                "type": "dat",
-                "id": 10,
-                "content": {
-                    "offset": 0,
-                    "data": {
-                        "mode": "base64",
-                        "buffer": arr.b64()
-                    }
-                }
-            },
-            {
-                "action": "upload",
-                "type": "dat",
-                "id": 12,
-                "content": {
-                    "offset": 8,
-                    "data": {
-                        "mode": "base64",
-                        "buffer": arrs.b64()
-                    }
-                }
-            },
-        ]
-    };
-
-    submit(req);
-}
-
-// Reset the view.
-function reset() {
-    window.zoom = 1;
-    window.shift = 0;
-
-    updateMVP();
 }
