@@ -68,6 +68,7 @@
                 <div class="four columns" id="left">
                     <nav>
                         <ol>
+
                             <!-- Select session -->
                             <li>
                                 <label for="selectSession">session</label>
@@ -78,34 +79,19 @@
                                 </select>
                             </li>
 
-                            <!-- Select color -->
+                            {% for feature in ('color', 'alpha', 'size') %}
+                            <!-- Select {{ feature }} -->
                             <li>
-                                <label for="selectColor">color</label>
-                                <select id="selectColor" class="u-full-width">
+                                <label for="select{{ feature.title() }}">{{ feature }}</label>
+                                <select id="select{{ feature.title() }}" class="u-full-width">
+                                    <option value="">default</option>
                                     <option value="time">time</option>
                                     <option value="cluster">cluster</option>
                                     <option value="amplitude">amplitude</option>
                                     <option value="depth">depth</option>
                                 </select>
                             </li>
-
-                            <!-- Select alpha -->
-                            <li>
-                                <label for="selectAlpha">alpha</label>
-                                <select id="selectAlpha" class="u-full-width">
-                                    <option value="time">time</option>
-                                    <option value="cluster">cluster</option>
-                                </select>
-                            </li>
-
-                            <!-- Select size -->
-                            <li>
-                                <label for="selectSize">size</label>
-                                <select id="selectSize" class="u-full-width">
-                                    <option value="time">time</option>
-                                    <option value="cluster">cluster</option>
-                                </select>
-                            </li>
+                            {% endfor %}
                         </ol>
 
 
@@ -124,34 +110,21 @@
                                 </select>
                             </li>
 
-                            <!-- Select colormap range -->
+                            {% for feature in ('colormap', 'alpha', 'size') %}
+                            <!-- Select {{ feature }} range -->
                             <li>
-                                <label for="sliderColormap">colormap range</label>
-                                <div id="sliderColormap"></div>
+                                <label for="slider{{ feature.title() }}">{{ feature }} range</label>
+                                <div id="slider{{ feature.title() }}"></div>
                             </li>
+                            {% endfor %}
 
-                            <!-- Select alpha range -->
-                            <li>
-                                <label for="sliderAlpha">alpha range</label>
-                                <div id="sliderAlpha"></div>
-                            </li>
-
-                            <!-- Select size range -->
-                            <li>
-                                <label for="sliderSize">size range</label>
-                                <div id="sliderSize"></div>
-                            </li>
                         </ol>
 
                     </nav>
 
                 </div>
                 <div class="eight columns" id="right">
-
-                    <div>
-                        <img id="img" />
-                    </div>
-
+                    <div><img id="img" /></div>
                 </div>
             </div>
         </form>
