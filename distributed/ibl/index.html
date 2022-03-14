@@ -661,6 +661,11 @@
                 submit(req);
             });
 
+
+            document.getElementById('selectSession').onchange = function (e) {
+                select(e.target.value);
+            }
+
         }
 
         // Select another session.
@@ -786,14 +791,21 @@
         <form>
             <div class="row">
                 <div class="four columns" id="left">
-
                     <nav>
                         <ol>
                             <!-- Select session -->
                             <li>
                                 <label for="selectSession">session</label>
                                 <select id="selectSession" class="u-full-width">
-                                    <option value="myeid">lab/mysubj/2020-01-01/001/</option>
+                                    <option
+                                        value="https://ibl.flatironinstitute.org/public/cortexlab/Subjects/KS023/2019-12-10/001/alf/probe01/">
+                                        /cortexlab/Subjects/KS023/2019-12-10/001/</option>
+                                    <option
+                                        value="https://ibl.flatironinstitute.org/public/churchlandlab/Subjects/CSHL047/2020-01-20/001/alf/probe00/">
+                                        /churchlandlab/Subjects/CSHL047/2020-01-20/001/</option>
+                                    <option
+                                        value="https://ibl.flatironinstitute.org/public/mainenlab/Subjects/ZM_2240/2020-01-21/001/alf/probe00/">
+                                        /mainenlab/Subjects/ZM_2240/2020-01-21/001/</option>
                                 </select>
                             </li>
 
