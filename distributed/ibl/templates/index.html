@@ -30,6 +30,11 @@
         integrity="sha512-igVQ7hyQVijOUlfg3OmcTZLwYJIBXU63xL9RC12xBHNpmGJAktDnzl9Iw0J4yrSaQtDxTTVlwhY730vphoVqJQ=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
+    <!-- socket.io -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"
+        integrity="sha512-MgkNs0gNdrnOM7k+0L+wgiRc5aLgl74sJQKbIWegVIMvVGPc1+gc1L2oK9Wf/D9pq58eqIJAxOonYPVE5UwUFA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
     <!-- Custom CSS styles -->
     <style>
         #left {
@@ -205,35 +210,13 @@
 
     <!-- Visualization client -->
     <script>
-        const DEFAULT_URI = "https://ibl.flatironinstitute.org/public/cortexlab/Subjects/KS023/2019-12-10/001/alf/probe01/";
         const COUNT = 2000000; // max number of spikes
-
-        const SESSIONS = {
-
-            "https://ibl.flatironinstitute.org/public/cortexlab/Subjects/KS023/2019-12-10/001/alf/probe01/": {
-                "times": "spikes.times.99ed1a2d-bb18-4f86-92f3-23a15b7d9972.npy",
-                "clusters": "spikes.clusters.2e3a207d-6b7a-41b3-80b9-d759a6557b55.npy",
-                "depths": "spikes.depths.9cbed712-3d4e-44d4-8ec8-f915a884e667.npy"
-            },
-
-            "https://ibl.flatironinstitute.org/public/churchlandlab/Subjects/CSHL047/2020-01-20/001/alf/probe00/": {
-                "times": "spikes.times.32609666-84f6-4b20-8450-afc311b3e64e.npy",
-                "clusters": "spikes.clusters.a44513ba-069e-443a-bcb6-1de2a5071615.npy",
-                "depths": "spikes.depths.879aedc4-227d-4234-828e-9d9f78b7323e.npy",
-            },
-
-            "https://ibl.flatironinstitute.org/public/mainenlab/Subjects/ZM_2240/2020-01-21/001/alf/probe00/": {
-                "times": "spikes.times.be8c4562-f83d-45c3-ba4d-7ac9eec94b85.npy",
-                "clusters": "spikes.clusters.33e2b747-8cf9-48d7-9814-69c6aa30cd59.npy",
-                "depths": "spikes.depths.7ba042a8-cc40-416f-8390-12b0c8f4009f.npy",
-            }
-        };
+        const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
 
         // Data payload for a given session.
-        function sessionJSON(uri) {
+        function sessionJSON(eid) {
             return {
-                "uri": uri,
-                "spikes": SESSIONS[uri]
+                "eid": eid,
             };
         }
 
@@ -394,7 +377,7 @@
                             "data": {
                                 "mode": "ibl_ephys",
                                 "count": count,
-                                "session": sessionJSON(DEFAULT_URI)
+                                "session": sessionJSON(DEFAULT_EID)
                             }
                         }
                     },
@@ -440,8 +423,8 @@
             };
         }
 
-        // Generate a JSON request to update to a new URI.
-        function updateRequest(uri) {
+        // Generate a JSON request to update to a new EID.
+        function updateRequest(eid) {
             const req = {
                 "version": "1.0",
                 "requests": [
@@ -454,7 +437,7 @@
                             "data": {
                                 "mode": "ibl_ephys",
                                 "count": COUNT,
-                                "session": sessionJSON(uri)
+                                "session": sessionJSON(eid)
                             }
                         }
                     },
@@ -467,8 +450,9 @@
         // Send requests to the server.
         function submit(contents) {
             if (!window.websocket) return;
-            if (window.websocket.readyState != 1) return;
-            window.websocket.send(JSON.stringify(contents));
+            // if (window.websocket.readyState != 1) return;
+            if (!window.websocket.connected) return;
+            window.websocket.emit("request", contents);
         }
 
         submit = throttle(submit, 100);
@@ -514,34 +498,33 @@
             initSlider('sliderColormap', [0, 1], [0, 1]);
 
 
-            window.websocket = new WebSocket("ws://localhost:1234/");
-            window.websocket.binaryType = "arraybuffer";
+            window.websocket = io();
 
-            window.websocket.onopen = function () {
-                console.log('socket open');
+            // window.websocket = new WebSocket("ws://localhost:5000/");
+            // window.websocket.binaryType = "arraybuffer";
+
+            // window.websocket.onopen = function () {
+            window.websocket.on("connect", () => {
+                console.log('socket connected');
 
                 var contents = loadJSON();
                 submit(contents);
-            };
+            });
 
-            window.websocket.onmessage = ({ data }) => {
+            // window.websocket.onmessage = ({ data }) => {
+            window.websocket.on("image", (data) => {
                 // display the received image
-                if (data instanceof ArrayBuffer) {
-                    console.log("received image");
-                    show(data);
+                let img = data["image"];
+                if (img instanceof ArrayBuffer) {
+                    show(img);
                 }
-            };
+            });
 
-            window.websocket.onclose = function () {
-                console.log('closing socket');
-            };
+            // window.websocket.onclose = function () {
+            window.websocket.on("disconnect", () => {
+                console.log('socket disconnected');
+            });
 
-
-
-            // // Create the session list.
-            // for (uri in SESSIONS) {
-            //     appendSession(uri);
-            // }
 
 
 
@@ -709,7 +692,7 @@
                                 "data": {
                                     "mode": "ibl_ephys",
                                     "count": COUNT,
-                                    "session": sessionJSON(DEFAULT_URI),
+                                    "session": sessionJSON(DEFAULT_EID),
                                     "features": {
                                         "color": feature
                                     }
@@ -727,8 +710,8 @@
         }
 
         // Select another session.
-        function select(uri) {
-            var contents = updateRequest(uri);
+        function select(eid) {
+            var contents = updateRequest(eid);
             submit(contents);
         }
 
@@ -855,15 +838,9 @@
                             <li>
                                 <label for="selectSession">session</label>
                                 <select id="selectSession" class="u-full-width">
-                                    <option
-                                        value="https://ibl.flatironinstitute.org/public/cortexlab/Subjects/KS023/2019-12-10/001/alf/probe01/">
-                                        /cortexlab/Subjects/KS023/2019-12-10/001/</option>
-                                    <option
-                                        value="https://ibl.flatironinstitute.org/public/churchlandlab/Subjects/CSHL047/2020-01-20/001/alf/probe00/">
-                                        /churchlandlab/Subjects/CSHL047/2020-01-20/001/</option>
-                                    <option
-                                        value="https://ibl.flatironinstitute.org/public/mainenlab/Subjects/ZM_2240/2020-01-21/001/alf/probe00/">
-                                        /mainenlab/Subjects/ZM_2240/2020-01-21/001/</option>
+                                    {% for session in sessions %}
+                                    <option value="{{ session }}">{{ session }}</option>
+                                    {% endfor %}
                                 </select>
                             </li>
 
@@ -873,6 +850,7 @@
                                 <select id="selectColor" class="u-full-width">
                                     <option value="time">time</option>
                                     <option value="cluster">cluster</option>
+                                    <option value="amplitude">amplitude</option>
                                     <option value="depth">depth</option>
                                 </select>
                             </li>
