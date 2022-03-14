@@ -434,7 +434,7 @@ function cmapData(cmap_id) {
 
 
 
-function colorFeatureData(name, feature) {
+function featureData(name, feature) {
     const req = {
         "version": "1.0",
         "requests": [
@@ -575,7 +575,19 @@ function setupDropdowns() {
 
     document.getElementById('selectColor').onchange = function (e) {
         var feature = e.target.value;
-        const req = colorFeatureData("color", feature);
+        const req = featureData("color", feature);
+        submit(req);
+    }
+
+    document.getElementById('selectAlpha').onchange = function (e) {
+        var feature = e.target.value;
+        const req = featureData("alpha", feature);
+        submit(req);
+    }
+
+    document.getElementById('selectSize').onchange = function (e) {
+        var feature = e.target.value;
+        const req = featureData("size", feature);
         submit(req);
     }
 }
