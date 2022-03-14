@@ -502,6 +502,10 @@
                 });
         }
 
+        function scaleSize(x) {
+            return Math.log(1 + x);
+        }
+
         // On load, create the websocket and set the onnopen, onmessage, and onclose callbacks.
         function load() {
 
@@ -605,7 +609,9 @@
                 var arr = new StructArray(1, [
                     ["size_range", "float32", 2],
                 ]);
-                arr.set(0, "size_range", [min, max]);
+                window.sizeMin = min;
+                window.sizeMax = max;
+                arr.set(0, "size_range", [min, max * scaleSize(window.zoom)]);
 
                 const req = {
                     "version": "1.0",
@@ -663,6 +669,8 @@
             submit(contents);
         }
 
+        window.sizeMin = 0.01;
+        window.sizeMax = 1;
 
 
         // Return a MVP structure for a given pan and zoom.
@@ -716,6 +724,12 @@
         function updateMVP() {
             arr = mvp(window.shift, 0, window.zoom, 1);
 
+
+            var arrs = new StructArray(1, [
+                ["size_range", "float32", 2],
+            ]);
+            arrs.set(0, "size_range", [window.sizeMin, window.sizeMax * scaleSize(window.zoom)]);
+
             const req = {
                 "version": "1.0",
                 "requests": [
@@ -728,6 +742,18 @@
                             "data": {
                                 "mode": "base64",
                                 "buffer": arr.b64()
+                            }
+                        }
+                    },
+                    {
+                        "action": "upload",
+                        "type": "dat",
+                        "id": 12,
+                        "content": {
+                            "offset": 8,
+                            "data": {
+                                "mode": "base64",
+                                "buffer": arrs.b64()
                             }
                         }
                     },
