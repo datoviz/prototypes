@@ -340,7 +340,6 @@ function changeSession(eid) {
 function submit(contents) {
     if (!window.websocket) return;
     if (!window.websocket.connected) return;
-    console.log("submit", contents);
     window.websocket.emit("request", contents);
 }
 
@@ -393,7 +392,7 @@ function paramsData() {
         ["cmap_id", "uint32", 1],
     ]);
 
-    arr.set(0, "alpha_range", [0, 1]);
+    arr.set(0, "alpha_range", [0, .1]);
     arr.set(0, "size_range", [.01, 1]);
     arr.set(0, "cmap_range", [0, 1]);
     arr.set(0, "cmap_id", [0]);
@@ -531,7 +530,7 @@ function reset() {
 
 function setupSliders() {
 
-    initSlider('sliderAlpha', [0, 1], [0, 1]);
+    initSlider('sliderAlpha', [0, .1], [0, 1]);
 
     onSliderChange('sliderAlpha', function (min, max) {
         const req = paramsUpdateRequest(0, rangeData(min, max));

@@ -1,2 +1,1 @@
-export FLASK_APP=flaskapp
-flask run
+python3 flaskapp.py
