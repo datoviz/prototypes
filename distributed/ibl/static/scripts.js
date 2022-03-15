@@ -5,6 +5,7 @@
 
 const COUNT = 1000000; // initial number of spikes
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
+const RAW_DATA_URI = (eid, time) => "/raw/" + eid + "/" + time.toFixed(2);
 
 window.params = {
     eid: DEFAULT_EID,
@@ -21,6 +22,8 @@ window.params = {
     size: null,
     size_range: [0.01, 1],
     size_lims: [0.01, 10],
+
+    time: 0,
 };
 
 window.zoom = 1;
@@ -70,7 +73,7 @@ function throttle(func, wait, options) {
 function show(arrbuf) {
     const blob = new Blob([arrbuf]);
     const url = URL.createObjectURL(blob);
-    const img = document.getElementById('img');
+    const img = document.getElementById('imgRaster');
     img.src = url;
 }
 
@@ -579,7 +582,7 @@ function setupDropdowns() {
 
 
 function setupPanzoom() {
-    const img = document.getElementById('img');
+    const img = document.getElementById('imgRaster');
 
     img.onwheel = function (e) {
         e.preventDefault();
@@ -630,6 +633,21 @@ function setupWebsocket() {
     window.websocket.on("disconnect", () => {
         console.log('socket disconnected');
     });
+}
+
+
+
+/*************************************************************************************************/
+/*  Raw ephys data viewer                                                                        */
+/*************************************************************************************************/
+
+function setRawImage(eid, time) {
+    window.params.eid = eid;
+    window.params.time = time;
+
+    var url = RAW_DATA_URI(window.params.eid, window.params.time);
+    const img = document.getElementById('imgRaw');
+    img.src = url;
 }
 
 

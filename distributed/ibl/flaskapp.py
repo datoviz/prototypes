@@ -9,11 +9,13 @@ import io
 import traceback
 
 import numpy as np
-
-from flask import Flask, render_template, session
+import png
+from flask import Flask, render_template, send_file, session
+from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, Namespace, emit
 
 from datoviz import Requester, Renderer
+from mtscomp.lossy import decompress_lossy
 
 
 # -------------------------------------------------------------------------------------------------
@@ -46,6 +48,18 @@ def normalize(x, target='float'):
     raise ValueError("unknow normalization target")
 
 
+def to_png(arr):
+    p = png.from_array(arr, mode="L")
+    b = io.BytesIO()
+    p.write(b)
+    b.seek(0)
+    return b
+
+
+def send_image(img):
+    return send_file(to_png(img), mimetype='image/png')
+
+
 # -------------------------------------------------------------------------------------------------
 # CONSTANTS
 # -------------------------------------------------------------------------------------------------
@@ -55,6 +69,8 @@ DATA_DIR = ROOT_DIR / 'data/rep_site'
 
 WIDTH = 800
 HEIGHT = 600
+
+TIME_HALF_WINDOW = 0.1  # in seconds
 
 
 # -------------------------------------------------------------------------------------------------
@@ -190,6 +206,7 @@ def render(rnd, board_id=1):
 # -------------------------------------------------------------------------------------------------
 
 app = Flask(__name__)
+CORS(app, support_credentials=True)
 socketio = SocketIO(app)
 
 
@@ -231,6 +248,41 @@ class RendererNamespace(Namespace):
         except Exception as e:
             logger.error(traceback.format_exc())
             return
+
+
+# -------------------------------------------------------------------------------------------------
+# Raw ephys data server
+# -------------------------------------------------------------------------------------------------
+
+def get_img(eid, time=0):
+    path_lossy = Path(__file__).parent / 'raw.lossy.npy'
+    lossy = decompress_lossy(path_lossy)
+    duration = lossy.duration
+    assert duration > 0
+
+    dt = TIME_HALF_WINDOW
+    t = float(time)
+    t = np.clip(t, dt, duration - dt)
+
+    arr = lossy.get(t - dt, t + dt, cast_to_uint8=True).T
+    return arr
+
+
+@app.route('/raw/<eid>/')
+@cross_origin(supports_credentials=True)
+def serve_default(eid):
+    img = get_img(eid)
+    return send_image(img)
+
+
+@app.route('/raw/<eid>/<time>')
+@cross_origin(supports_credentials=True)
+def serve_time_float(eid, time=None):
+    if not time or time == 'null':
+        time = 0
+    time = float(time)
+    img = get_img(eid, time=time)
+    return send_image(img)
 
 
 if __name__ == '__main__':
