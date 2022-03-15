@@ -1,4 +1,6 @@
 flask
+flask-cors
 flask-socketio
 gevent-websocket
 eventlet
+pypng

@@ -266,6 +266,8 @@ class RendererNamespace(Namespace):
 # -------------------------------------------------------------------------------------------------
 
 def get_img(eid, time=0):
+    time = float(time)
+    assert 0 <= time <= 1e6
     path_lossy = Path(__file__).parent / 'raw.lossy.npy'
     lossy = decompress_lossy(path_lossy)
     duration = lossy.duration
@@ -298,4 +300,4 @@ def serve_time_float(eid, time=None):
 
 if __name__ == '__main__':
     socketio.on_namespace(RendererNamespace('/'))
-    socketio.run(app, '0.0.0.0', port=5000)
+    socketio.run(app, '0.0.0.0', port=3141)
