@@ -214,14 +214,17 @@ socketio = SocketIO(app)
 # Serving the HTML page
 # -------------------------------------------------------------------------------------------------
 
-def get_sessions():
-    for session in sorted(DATA_DIR.iterdir()):
-        yield session.name
+def get_context():
+    sessions = [session.name for session in sorted(DATA_DIR.iterdir())]
+    return {
+        'sessions': sessions,
+    }
 
 
 @app.route('/')
 def main():
-    return render_template('index.html', sessions=get_sessions())
+    ctx = get_context()
+    return render_template('index.html', sessions=ctx['sessions'], js_context=ctx)
 
 
 # -------------------------------------------------------------------------------------------------

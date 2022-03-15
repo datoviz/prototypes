@@ -664,4 +664,6 @@ function load() {
     setupPanzoom();
 
     setupWebsocket();
+
+    setRawImage(window.params.eid, window.params.time);
 }
