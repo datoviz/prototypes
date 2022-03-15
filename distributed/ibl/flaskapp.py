@@ -70,7 +70,6 @@ def get_array(data):
         # Retrieve the requested session eid.
         data.session = Bunch(data.session)
         eid = data.session.eid
-        print(eid)
         session_dir = DATA_DIR / eid
 
         # Load the data.
@@ -78,15 +77,11 @@ def get_array(data):
         spike_depths = np.load(session_dir / 'spikes.depths.npy')
         spike_clusters = np.load(session_dir / 'spikes.clusters.npy')
         spike_amps = np.load(session_dir / 'spikes.amps.npy')
+        n = len(spike_times)
 
         spike_depths[np.isnan(spike_depths)] = 0
 
         logger.debug(f"downloaded {len(spike_times)} spikes")
-
-        # HACK: maximum data size
-        n = data.count
-        assert n > 0
-        assert n <= spike_times.size
 
         # Prepare the vertex buffer for the raster graphics.
         arr = np.zeros(n, dtype=[
@@ -98,16 +93,16 @@ def get_array(data):
         ])
 
         # Generate the position data.
-        x = normalize(spike_times[:n])
-        y = normalize(spike_depths[:n])
+        x = normalize(spike_times)
+        y = normalize(spike_depths)
         arr["pos"][:, 0] = x
         arr["pos"][:, 1] = y
 
         features = {
-            'time': spike_times[:n],
-            'cluster': spike_clusters[:n],
-            'depth': spike_depths[:n],
-            'amplitude': spike_amps[:n],
+            'time': spike_times,
+            'cluster': spike_clusters,
+            'depth': spike_depths,
+            'amplitude': spike_amps,
             None: np.ones(n),
         }
 
@@ -127,6 +122,21 @@ def get_array(data):
     raise Exception(f"Data upload mode '{data.mode}' unsupported")
 
 
+def get_vertex_count(data):
+    if not isinstance(data, dict):
+        return data
+    data = Bunch(data)
+    if data.mode == 'ibl_ephys':
+        # Retrieve the requested session eid.
+        data.session = Bunch(data.session)
+        eid = data.session.eid
+        session_dir = DATA_DIR / eid
+        spike_times = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
+        return spike_times.size
+
+    raise Exception(f"Data upload mode '{data.mode}' unsupported")
+
+
 # -------------------------------------------------------------------------------------------------
 # Renderer
 # -------------------------------------------------------------------------------------------------
@@ -140,7 +150,7 @@ ROUTER = {
     ('upload', 'dat'): lambda r, req: r.upload_dat(int(req.id), int(req.content.offset), get_array(Bunch(req.content.data))),
     ('record', 'begin'): lambda r, req: r.record_begin(int(req.id)),
     ('record', 'viewport'): lambda r, req: r.record_viewport(int(req.id), int(req.content.offset[0]), int(req.content.offset[1]), int(req.content.shape[0]), int(req.content.shape[0])),
-    ('record', 'draw'): lambda r, req: r.record_draw(int(req.id), int(req.content.graphics), int(req.content.first_vertex), int(req.content.vertex_count)),
+    ('record', 'draw'): lambda r, req: r.record_draw(int(req.id), int(req.content.graphics), int(req.content.first_vertex), get_vertex_count(req.content.vertex_count)),
     ('record', 'end'): lambda r, req: r.record_end(int(req.id)),
     ('update', 'board'): lambda r, req: r.update_board(int(req.id)),
 }
@@ -225,4 +235,4 @@ class RendererNamespace(Namespace):
 
 if __name__ == '__main__':
     socketio.on_namespace(RendererNamespace('/'))
-    socketio.run(app, port=5000)
+    socketio.run(app, '0.0.0.0', port=5000)

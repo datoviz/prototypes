@@ -3,7 +3,7 @@
 /*  Constants                                                                                    */
 /*************************************************************************************************/
 
-const COUNT = 2000000; // max number of spikes
+const COUNT = 1000000; // initial number of spikes
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
 
 window.params = {
@@ -177,10 +177,55 @@ function mvpData(px, py, zx, zy) {
 
 
 
+function recordJSON() {
+    return [
+        {
+            "action": "record",
+            "type": "begin",
+            "id": 1
+        },
+        {
+            "action": "record",
+            "type": "viewport",
+            "id": 1,
+            "content": {
+                "offset": [
+                    0,
+                    0
+                ],
+                "shape": [
+                    0,
+                    0
+                ]
+            }
+        },
+        {
+            "action": "record",
+            "type": "draw",
+            "id": 1,
+            "content": {
+                "graphics": 2,
+                "first_vertex": 0,
+                "vertex_count":
+                {
+                    "mode": "ibl_ephys",
+                    "session": vertexData()
+                }
+            }
+        },
+        {
+            "action": "record",
+            "type": "end",
+            "id": 1
+        }
+    ];
+}
+
+
+
 // Load the initial JSON.
 function loadJSON() {
-    var count = COUNT;
-    return {
+    var requests = {
         "version": "1.0",
         "requests": [
             {
@@ -314,7 +359,7 @@ function loadJSON() {
                 "id": 3,
                 "content": {
                     "type": 2,
-                    "size": 20 * count
+                    "size": 20 * COUNT
                 }
             },
             {
@@ -333,7 +378,6 @@ function loadJSON() {
                     "offset": 0,
                     "data": {
                         "mode": "ibl_ephys",
-                        "count": count,
                         "session": vertexData()
                     }
                 }
@@ -341,43 +385,10 @@ function loadJSON() {
 
 
 
-            {
-                "action": "record",
-                "type": "begin",
-                "id": 1
-            },
-            {
-                "action": "record",
-                "type": "viewport",
-                "id": 1,
-                "content": {
-                    "offset": [
-                        0,
-                        0
-                    ],
-                    "shape": [
-                        0,
-                        0
-                    ]
-                }
-            },
-            {
-                "action": "record",
-                "type": "draw",
-                "id": 1,
-                "content": {
-                    "graphics": 2,
-                    "first_vertex": 0,
-                    "vertex_count": count
-                }
-            },
-            {
-                "action": "record",
-                "type": "end",
-                "id": 1
-            }
         ]
     };
+    requests["requests"].push(...recordJSON());
+    return requests;
 }
 
 
@@ -400,7 +411,7 @@ submit = throttle(submit, 100);
 // Update the vertex data.
 function updateVertexData(eid) {
     window.params.eid = eid;
-    var contents = {
+    var requests = {
         "version": "1.0",
         "requests": [
             {
@@ -411,14 +422,14 @@ function updateVertexData(eid) {
                     "offset": 0,
                     "data": {
                         "mode": "ibl_ephys",
-                        "count": COUNT,
                         "session": vertexData()
                     }
                 }
             },
         ]
     };
-    submit(contents);
+    requests["requests"].push(...recordJSON());
+    submit(requests);
 }
 
 
