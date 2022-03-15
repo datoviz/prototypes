@@ -24,6 +24,7 @@ window.params = {
     size_lims: [0.01, 10],
 
     time: 0,
+    duration: 0,
 };
 
 window.zoom = 1;
@@ -80,6 +81,10 @@ function show(arrbuf) {
 function scaleSize(x) {
     return 1 + Math.log(x);
 }
+
+function clamp(x, min, max) {
+    return Math.min(Math.max(x, min), max);
+};
 
 
 
@@ -413,8 +418,9 @@ submit = throttle(submit, 100);
 
 // Update the session duration.
 function updateDuration() {
-    var duration = JS_CONTEXT["durations"][window.params.eid].toFixed(2);
-    document.getElementById("sessionDuration").innerHTML = duration + " seconds";
+    var duration = JS_CONTEXT["durations"][window.params.eid];
+    window.params.duration = duration;
+    document.getElementById("sessionDuration").innerHTML = duration.toFixed(2) + " seconds";
 }
 
 
@@ -625,6 +631,39 @@ function setupPanzoom() {
 
 
 
+function setupClick() {
+    const img = document.getElementById('imgRaster');
+
+    img.onclick = function (e) {
+        // Find the mouse position in normalized coordinates [0, 1].
+        var rect = e.target.getBoundingClientRect();
+        var x = e.clientX - rect.left; //x position within the element.
+        var y = e.clientY - rect.top;  //y position within the element.
+
+
+        let w = e.target.width;
+        let h = e.target.height;
+
+        x /= w;
+        y /= h;
+        x = clamp(x, 0, 1);
+
+        // Take pan and zoom into account.
+        x = .5 * (1 + (-1 + 2 * x) / window.zoom - window.shift);
+
+        // Scale by the duration to get the time.
+        var p = window.params;
+        var duration = p.duration;
+        p.time = x * duration;
+        console.log("select time: ", p.time)
+
+        // Update the raw data image.
+        setRawImage();
+    }
+}
+
+
+
 function setupWebsocket() {
     window.websocket = io();
 
@@ -654,10 +693,7 @@ function setupWebsocket() {
 /*  Raw ephys data viewer                                                                        */
 /*************************************************************************************************/
 
-function setRawImage(eid, time) {
-    window.params.eid = eid;
-    window.params.time = time;
-
+function setRawImage() {
     var url = RAW_DATA_URI(window.params.eid, window.params.time);
     const img = document.getElementById('imgRaw');
     img.src = url;
@@ -675,9 +711,9 @@ function load() {
     setupSliders();
     setupDropdowns();
     setupPanzoom();
-
+    setupClick();
     setupWebsocket();
 
-    setRawImage(window.params.eid, window.params.time);
+    setRawImage();
     updateDuration();
 }
