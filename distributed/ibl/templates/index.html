@@ -69,16 +69,27 @@
             <div class="row">
                 <div class="four columns" id="left">
                     <nav>
+                        <!-- Sesssion -->
                         <ol>
                             {{ macros.select_session() }}
-                            {{ macros.feature('color') }}
-                            {{ macros.feature('alpha') }}
-                            {{ macros.feature('size') }}
                         </ol>
+
+                        <!-- Color -->
                         <ol>
+                            {{ macros.feature('color') }}
                             {{ macros.colormap() }}
                             {{ macros.slider('colormap') }}
+                        </ol>
+
+                        <!-- Alpha -->
+                        <ol>
+                            {{ macros.feature('alpha') }}
                             {{ macros.slider('alpha') }}
+                        </ol>
+
+                        <!-- Size -->
+                        <ol>
+                            {{ macros.feature('size') }}
                             {{ macros.slider('size') }}
                         </ol>
                     </nav>
