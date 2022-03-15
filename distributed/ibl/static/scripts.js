@@ -411,9 +411,19 @@ submit = throttle(submit, 100);
 
 
 
+// Update the session duration.
+function updateDuration() {
+    var duration = JS_CONTEXT["durations"][window.params.eid].toFixed(2);
+    document.getElementById("sessionDuration").innerHTML = duration + " seconds";
+}
+
+
+
 // Update the vertex data.
 function updateVertexData(eid) {
     window.params.eid = eid;
+
+    // Update the raster plot
     var requests = {
         "version": "1.0",
         "requests": [
@@ -433,6 +443,9 @@ function updateVertexData(eid) {
     };
     requests["requests"].push(...recordJSON());
     submit(requests);
+
+    // Update the session duration.
+    updateDuration();
 }
 
 
@@ -666,4 +679,5 @@ function load() {
     setupWebsocket();
 
     setRawImage(window.params.eid, window.params.time);
+    updateDuration();
 }

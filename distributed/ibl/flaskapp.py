@@ -214,10 +214,18 @@ socketio = SocketIO(app)
 # Serving the HTML page
 # -------------------------------------------------------------------------------------------------
 
+def get_duration(session):
+    return np.load(DATA_DIR / session / 'spikes.times.npy', mmap_mode='r')[-1] + 1
+
+
 def get_context():
     sessions = [session.name for session in sorted(DATA_DIR.iterdir())]
     return {
         'sessions': sessions,
+        'durations': {
+            session: get_duration(session)
+            for session in sessions
+        }
     }
 
 

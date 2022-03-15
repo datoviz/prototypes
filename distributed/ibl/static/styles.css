@@ -17,6 +17,10 @@
     font-weight: bold;
 }
 
+#left li span {
+    padding-left: 10px;
+}
+
 #left ol {
     padding-bottom: 16px;
     border-bottom: 1px solid #888;
