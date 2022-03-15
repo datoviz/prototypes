@@ -6,11 +6,25 @@
 const COUNT = 2000000; // max number of spikes
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
 
+window.params = {
+    eid: DEFAULT_EID,
+
+    color: null,
+    colormap: 0,
+    colormap_range: [0, 1],
+    colormap_lims: [0, 1],
+
+    alpha: null,
+    alpha_range: [0.01, 0.1],
+    alpha_lims: [0.01, 1],
+
+    size: null,
+    size_range: [0.01, 1],
+    size_lims: [0.01, 10],
+};
+
 window.zoom = 1;
 window.shift = 0;
-
-window.sizeMin = 0.01;
-window.sizeMax = 1;
 
 window.websocket = null;
 
@@ -61,7 +75,7 @@ function show(arrbuf) {
 }
 
 function scaleSize(x) {
-    return Math.log(1 + x);
+    return 1 + Math.log(x);
 }
 
 
@@ -97,11 +111,68 @@ function onSliderChange(id, callback) {
 /*  Datoviz JSON requests                                                                        */
 /*************************************************************************************************/
 
-// Data payload for a given session.
-function sessionJSON(eid) {
+// Data payload for the vertex buffer.
+function vertexData() {
+    var p = window.params;
     return {
-        "eid": eid,
+        eid: p.eid,
+        color: p.color,
+        alpha: p.alpha,
+        size: p.size,
     };
+}
+
+
+
+
+// Base64 data for the params buffer.
+function paramsData() {
+    var p = window.params;
+
+    var arr = new StructArray(1, [
+        ["alpha_range", "float32", 2],
+        ["size_range", "float32", 2],
+        ["cmap_range", "float32", 2],
+        ["cmap_id", "uint32", 1],
+    ]);
+
+    arr.set(0, "alpha_range", p.alpha_range);
+    arr.set(0, "size_range", [p.size_range[0], scaleSize(window.zoom) * p.size_range[1]]);
+    arr.set(0, "cmap_range", p.colormap_range);
+    arr.set(0, "cmap_id", [p.colormap]);
+
+    return arr.b64();
+}
+
+
+// Return a MVP structure for a given pan and zoom.
+function mvpData(px, py, zx, zy) {
+    // 3 matrices 4x4: model, view, proj, and finally time
+    var arr = new StructArray(1, [
+        ["model", "float32", 16],
+        ["view", "float32", 16],
+        ["proj", "float32", 16],
+        ["time", "float32", 1],
+    ]);
+
+    arr.set(0, "model", [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1]);
+    arr.set(0, "view", [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        px, py, -2, 1]);
+    arr.set(0, "proj", [
+        zx, 0, 0, 0,
+        0, zy, 0, 0,
+        0, 0, -0.1, 0,
+        0, 0, 0, 1]);
+    arr.set(0, "time", [0]);
+
+    return arr.b64();
 }
 
 
@@ -263,7 +334,7 @@ function loadJSON() {
                     "data": {
                         "mode": "ibl_ephys",
                         "count": count,
-                        "session": sessionJSON(DEFAULT_EID)
+                        "session": vertexData()
                     }
                 }
             },
@@ -311,30 +382,9 @@ function loadJSON() {
 
 
 
-// Select another session.
-function changeSession(eid) {
-    var contents = {
-        "version": "1.0",
-        "requests": [
-            {
-                "action": "upload",
-                "type": "dat",
-                "id": 3,
-                "content": {
-                    "offset": 0,
-                    "data": {
-                        "mode": "ibl_ephys",
-                        "count": COUNT,
-                        "session": sessionJSON(eid)
-                    }
-                }
-            },
-        ]
-    };
-    submit(contents);
-}
-
-
+/*************************************************************************************************/
+/*  Making WebSocket requests                                                                    */
+/*************************************************************************************************/
 
 // Send requests to the server.
 function submit(contents) {
@@ -347,94 +397,10 @@ submit = throttle(submit, 100);
 
 
 
-/*************************************************************************************************/
-/*  Uniform buffers                                                                              */
-/*************************************************************************************************/
-
-// Return a MVP structure for a given pan and zoom.
-function mvpData(px, py, zx, zy) {
-    // 3 matrices 4x4: model, view, proj, and finally time
-    var arr = new StructArray(1, [
-        ["model", "float32", 16],
-        ["view", "float32", 16],
-        ["proj", "float32", 16],
-        ["time", "float32", 1],
-    ]);
-
-    arr.set(0, "model", [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1]);
-    arr.set(0, "view", [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        px, py, -2, 1]);
-    arr.set(0, "proj", [
-        zx, 0, 0, 0,
-        0, zy, 0, 0,
-        0, 0, -0.1, 0,
-        0, 0, 0, 1]);
-    arr.set(0, "time", [0]);
-
-    return arr.b64();
-}
-
-
-
-// Return a MVP structure for a given pan and zoom.
-function paramsData() {
-    var arr = new StructArray(1, [
-        ["alpha_range", "float32", 2],
-        ["size_range", "float32", 2],
-        ["cmap_range", "float32", 2],
-        ["cmap_id", "uint32", 1],
-    ]);
-
-    arr.set(0, "alpha_range", [0, .1]);
-    arr.set(0, "size_range", [.01, 1]);
-    arr.set(0, "cmap_range", [0, 1]);
-    arr.set(0, "cmap_id", [0]);
-
-    return arr.b64();
-}
-
-
-
-function sizeRangeData() {
-    var arr = new StructArray(1, [
-        ["size_range", "float32", 2],
-    ]);
-    arr.set(0, "size_range", [window.sizeMin, window.sizeMax * scaleSize(window.zoom)]);
-
-    return arr.b64();
-}
-
-
-
-function rangeData(min, max) {
-    var arr = new StructArray(1, [
-        ["var", "float32", 2],
-    ]);
-    arr.set(0, "var", [min, max]);
-    return arr.b64();
-}
-
-
-
-function cmapData(cmap_id) {
-    var arr = new StructArray(1, [
-        ["cmap_id", "uint32", 1],
-    ]);
-    arr.set(0, "cmap_id", [cmap_id]);
-    return arr.b64();
-}
-
-
-
-function featureData(name, feature) {
-    const req = {
+// Update the vertex data.
+function updateVertexData(eid) {
+    window.params.eid = eid;
+    var contents = {
         "version": "1.0",
         "requests": [
             {
@@ -446,26 +412,20 @@ function featureData(name, feature) {
                     "data": {
                         "mode": "ibl_ephys",
                         "count": COUNT,
-                        "session": sessionJSON(DEFAULT_EID),
-                        "features": {
-                            [name]: feature
-                        }
+                        "session": vertexData()
                     }
                 }
             },
         ]
     };
-    return req;
+    submit(contents);
 }
 
 
 
-/*************************************************************************************************/
-/*  Uniform buffer updates                                                                       */
-/*************************************************************************************************/
-
-function paramsUpdateRequest(offset, buffer) {
-    return {
+// Update the params data.
+function updateParamsData() {
+    var contents = {
         "version": "1.0",
         "requests": [
             {
@@ -473,24 +433,26 @@ function paramsUpdateRequest(offset, buffer) {
                 "type": "dat",
                 "id": 12,
                 "content": {
-                    "offset": offset,
+                    "offset": 0,
                     "data": {
                         "mode": "base64",
-                        "buffer": buffer
+                        "buffer": paramsData()
                     }
                 }
             },
         ]
     };
+    submit(contents);
 }
 
 
 
 // Send the updated MVP struct to the server.
-function updateUniforms() {
+function updateMvpData() {
     const req = {
         "version": "1.0",
         "requests": [
+
             // Change the MVP matrices.
             {
                 "action": "upload",
@@ -506,7 +468,18 @@ function updateUniforms() {
             },
 
             // Change the size range data in the uniform params.
-            paramsUpdateRequest(8, sizeRangeData())["requests"][0]
+            {
+                "action": "upload",
+                "type": "dat",
+                "id": 12,
+                "content": {
+                    "offset": 0,
+                    "data": {
+                        "mode": "base64",
+                        "buffer": paramsData()
+                    }
+                }
+            }
         ]
     };
 
@@ -519,7 +492,7 @@ function updateUniforms() {
 function reset() {
     window.zoom = 1;
     window.shift = 0;
-    updateUniforms();
+    updateMvpData();
 }
 
 
@@ -530,32 +503,37 @@ function reset() {
 
 function setupSliders() {
 
-    initSlider('sliderAlpha', [0, .1], [0, 1]);
+    // Alpha slider
+
+    initSlider('sliderAlpha', window.params.alpha_range, window.params.alpha_lims);
 
     onSliderChange('sliderAlpha', function (min, max) {
-        const req = paramsUpdateRequest(0, rangeData(min, max));
-        submit(req);
+        window.params.alpha_range = [min, max];
+        updateParamsData();
     });
 
 
 
-    initSlider('sliderSize', [0.01, 1], [0, 5]);
+    // Size slider
+
+    initSlider('sliderSize', window.params.size_range, window.params.size_lims);
 
     onSliderChange('sliderSize', function (min, max) {
-        window.sizeMin = min;
-        window.sizeMax = max;
-        const req = paramsUpdateRequest(8, sizeRangeData());
-        submit(req);
+        window.params.size_range = [min, max];
+        updateParamsData();
     });
 
 
 
-    initSlider('sliderColormap', [0, 1], [0, 1]);
+    // Colormap slider
+
+    initSlider('sliderColormap', window.params.colormap_range, window.params.colormap_lims);
 
     onSliderChange('sliderColormap', function (min, max) {
-        const req = paramsUpdateRequest(16, rangeData(min, max));
-        submit(req);
+        window.params.colormap_range = [min, max];
+        updateParamsData();
     });
+
 }
 
 
@@ -563,31 +541,27 @@ function setupSliders() {
 function setupDropdowns() {
 
     document.getElementById('selectSession').onchange = function (e) {
-        changeSession(e.target.value);
+        updateVertexData(e.target.value);
     }
 
     document.getElementById('selectColormap').onchange = function (e) {
-        var cmap_id = parseInt(e.target.value);
-        const req = paramsUpdateRequest(24, cmapData(cmap_id));
-        submit(req);
+        window.params.colormap = parseInt(e.target.value);
+        updateParamsData();
     }
 
     document.getElementById('selectColor').onchange = function (e) {
-        var feature = e.target.value;
-        const req = featureData("color", feature);
-        submit(req);
+        window.params.color = e.target.value;
+        updateVertexData(window.params.eid);
     }
 
     document.getElementById('selectAlpha').onchange = function (e) {
-        var feature = e.target.value;
-        const req = featureData("alpha", feature);
-        submit(req);
+        window.params.alpha = e.target.value;
+        updateVertexData(window.params.eid);
     }
 
     document.getElementById('selectSize').onchange = function (e) {
-        var feature = e.target.value;
-        const req = featureData("size", feature);
-        submit(req);
+        window.params.size = e.target.value;
+        updateVertexData(window.params.eid);
     }
 }
 
@@ -614,7 +588,7 @@ function setupPanzoom() {
         window.shift -= center * (1 / z - 1 / window.zoom);
 
         if (window.zoom != z)
-            updateUniforms();
+            updateMvpData();
     }
 
     img.ondblclick = function (e) {

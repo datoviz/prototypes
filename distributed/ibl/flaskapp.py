@@ -68,7 +68,9 @@ def get_array(data):
     elif data.mode == 'ibl_ephys':
 
         # Retrieve the requested session eid.
-        eid = data.session['eid']
+        data.session = Bunch(data.session)
+        eid = data.session.eid
+        print(eid)
         session_dir = DATA_DIR / eid
 
         # Load the data.
@@ -109,19 +111,16 @@ def get_array(data):
             None: np.ones(n),
         }
 
-        reqfet = data.get('features', {})
-
         # Color feature.
-        fet_color = reqfet.get('color', None) or None
-        arr["cmap_val"][:] = normalize(features[fet_color], target='uint8')
+        arr["cmap_val"][:] = normalize(
+            features[data.session.color], target='uint8')
 
         # Alpha feature.
-        fet_alpha = reqfet.get('alpha', None) or None
-        arr["alpha"][:] = normalize(features[fet_alpha], target='uint8')
+        arr["alpha"][:] = normalize(
+            features[data.session.alpha], target='uint8')
 
         # Size feature.
-        fet_size = reqfet.get('size', None) or None
-        arr["size"][:] = normalize(features[fet_size], target='uint8')
+        arr["size"][:] = normalize(features[data.session.size], target='uint8')
 
         return arr
 
