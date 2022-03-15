@@ -1,0 +1,66 @@
+<!-- BEGIN MACROS -->
+
+
+
+<!-- SESSION SELECTION MACRO -->
+{% macro select_session() -%}
+<!-- Select session -->
+<li>
+    <label for="selectSession">session</label>
+    <select id="selectSession" class="u-full-width">
+        {% for session in sessions %}
+        <option value="{{ session }}">{{ session }}</option>
+        {% endfor %}
+    </select>
+</li>
+{%- endmacro %}
+
+
+
+<!-- FEATURE MACRO -->
+{% macro feature(name) -%}
+<!-- Select {{ name }} -->
+<li>
+    <label for="select{{ name.title() }}">{{ name }}</label>
+    <select id="select{{ name.title() }}" class="u-full-width">
+        <option value="">default</option>
+        <option value="time">time</option>
+        <option value="cluster">cluster</option>
+        <option value="amplitude">amplitude</option>
+        <option value="depth">depth</option>
+    </select>
+</li>
+{%- endmacro %}
+
+
+
+<!-- SLIDER MACRO -->
+{% macro slider(name) -%}
+<!-- Select {{ name }} range -->
+<li>
+    <label for="slider{{ name.title() }}">{{ name }} range</label>
+    <div id="slider{{ name.title() }}"></div>
+</li>
+{%- endmacro %}
+
+
+
+<!-- COLORMAP MACRO -->
+{% macro colormap() -%}
+<!-- Select colormap -->
+<li>
+    <label for="selectColormap">colormap</label>
+    <select id="selectColormap" class="u-full-width">
+        <option value="0">binary</option>
+        <option value="1">hsv</option>
+        <option value="6">viridis</option>
+        <option value="27">cool</option>
+        <option value="31">hot</option>
+        <option value="61">jet</option>
+    </select>
+</li>
+{%- endmacro %}
+
+
+
+<!-- END MACROS -->

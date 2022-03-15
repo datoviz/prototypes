@@ -1,3 +1,5 @@
+{% import 'macros.html' as macros with context %}
+
 <!DOCTYPE html>
 <html>
 
@@ -68,60 +70,18 @@
                 <div class="four columns" id="left">
                     <nav>
                         <ol>
-
-                            <!-- Select session -->
-                            <li>
-                                <label for="selectSession">session</label>
-                                <select id="selectSession" class="u-full-width">
-                                    {% for session in sessions %}
-                                    <option value="{{ session }}">{{ session }}</option>
-                                    {% endfor %}
-                                </select>
-                            </li>
-
-                            {% for feature in ('color', 'alpha', 'size') %}
-                            <!-- Select {{ feature }} -->
-                            <li>
-                                <label for="select{{ feature.title() }}">{{ feature }}</label>
-                                <select id="select{{ feature.title() }}" class="u-full-width">
-                                    <option value="">default</option>
-                                    <option value="time">time</option>
-                                    <option value="cluster">cluster</option>
-                                    <option value="amplitude">amplitude</option>
-                                    <option value="depth">depth</option>
-                                </select>
-                            </li>
-                            {% endfor %}
+                            {{ macros.select_session() }}
+                            {{ macros.feature('color') }}
+                            {{ macros.feature('alpha') }}
+                            {{ macros.feature('size') }}
                         </ol>
-
-
-
                         <ol>
-                            <!-- Select colormap -->
-                            <li>
-                                <label for="selectColormap">colormap</label>
-                                <select id="selectColormap" class="u-full-width">
-                                    <option value="0">binary</option>
-                                    <option value="1">hsv</option>
-                                    <option value="6">viridis</option>
-                                    <option value="27">cool</option>
-                                    <option value="31">hot</option>
-                                    <option value="61">jet</option>
-                                </select>
-                            </li>
-
-                            {% for feature in ('colormap', 'alpha', 'size') %}
-                            <!-- Select {{ feature }} range -->
-                            <li>
-                                <label for="slider{{ feature.title() }}">{{ feature }} range</label>
-                                <div id="slider{{ feature.title() }}"></div>
-                            </li>
-                            {% endfor %}
-
+                            {{ macros.colormap() }}
+                            {{ macros.slider('colormap') }}
+                            {{ macros.slider('alpha') }}
+                            {{ macros.slider('size') }}
                         </ol>
-
                     </nav>
-
                 </div>
                 <div class="eight columns" id="right">
                     <div><img id="img" /></div>
