@@ -638,6 +638,9 @@ function setupRaster() {
     img.onload = function (e) {
         setLineOffset();
     }
+    window.onresize = function (e) {
+        setLineOffset();
+    }
 
 
     // Prevent image dragging.
