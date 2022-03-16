@@ -270,7 +270,14 @@ class RendererNamespace(Namespace):
 def get_img(eid, time=0):
     time = float(time)
     assert 0 <= time <= 1e6
-    path_lossy = Path(__file__).parent / 'raw.lossy.npy'
+
+    session_dir = DATA_DIR / eid
+    path_lossy = list(session_dir.glob("*.lossy.npy"))
+    path_lossy = path_lossy[0] if path_lossy else None
+    if not path_lossy:
+        logger.error(f"lossy raw data file does not exist at {path_lossy}")
+        return
+    assert path_lossy.exists()
     lossy = decompress_lossy(path_lossy)
     duration = lossy.duration
     assert duration > 0
@@ -280,6 +287,7 @@ def get_img(eid, time=0):
     t = np.clip(t, dt, duration - dt)
 
     arr = lossy.get(t - dt, t + dt, cast_to_uint8=True).T
+    arr = arr[:, ::-1].copy()
     return arr
 
 
@@ -287,7 +295,8 @@ def get_img(eid, time=0):
 @cross_origin(supports_credentials=True)
 def serve_default(eid):
     img = get_img(eid)
-    return send_image(img)
+    if img is not None:
+        return send_image(img)
 
 
 @app.route('/raw/<eid>/<time>')
@@ -297,7 +306,8 @@ def serve_time_float(eid, time=None):
         time = 0
     time = float(time)
     img = get_img(eid, time=time)
-    return send_image(img)
+    if img is not None:
+        return send_image(img)
 
 
 if __name__ == '__main__':
