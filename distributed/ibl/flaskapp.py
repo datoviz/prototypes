@@ -126,14 +126,15 @@ def get_array(data):
 
         # Color feature.
         arr["cmap_val"][:] = normalize(
-            features[data.session.color], target='uint8')
+            features[data.session.color or None], target='uint8')
 
         # Alpha feature.
         arr["alpha"][:] = normalize(
-            features[data.session.alpha], target='uint8')
+            features[data.session.alpha or None], target='uint8')
 
         # Size feature.
-        arr["size"][:] = normalize(features[data.session.size], target='uint8')
+        arr["size"][:] = normalize(
+            features[data.session.size or None], target='uint8')
 
         return arr
 
