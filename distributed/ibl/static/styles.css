@@ -2,7 +2,6 @@
 /*  Left panel                                                                                   */
 /*************************************************************************************************/
 
-
 #left {
     padding: 20px;
     background-color: #ddd;
@@ -38,6 +37,7 @@
 
 #right img {
     width: 100%;
+    height: 100%;
     aspect-ratio: 8/6;
     border: 1px solid #aaa;
 }
@@ -87,4 +87,20 @@
 
 .noUi-handle:after {
     left: 12px !important;
+}
+
+
+
+/*************************************************************************************************/
+/*  Raster image                                                                                 */
+/*************************************************************************************************/
+
+#rasterLine {
+    background-color: #ddd;
+    border: 1px solid #aaa;
+    width: 5px;
+    position: absolute;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
 }

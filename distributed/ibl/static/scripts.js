@@ -153,6 +153,7 @@ function paramsData() {
 }
 
 
+
 // Return a MVP structure for a given pan and zoom.
 function mvpData(px, py, zx, zy) {
     // 3 matrices 4x4: model, view, proj, and finally time
@@ -600,8 +601,11 @@ function setupDropdowns() {
 
 
 
-function setupPanzoom() {
+function setupRaster() {
     const img = document.getElementById('imgRaster');
+    const line = document.getElementById('rasterLine');
+
+    line.style.height = (img.offsetHeight - 2) + "px";
 
     img.onwheel = function (e) {
         e.preventDefault();
@@ -609,8 +613,8 @@ function setupPanzoom() {
         let z = window.zoom;
 
         var rect = e.target.getBoundingClientRect();
-        var x = e.clientX - rect.left; //x position within the element.
-        var y = e.clientY - rect.top;  //y position within the element.
+        var x = e.clientX - rect.left; // x position within the element.
+        var y = e.clientY - rect.top;  // y position within the element.
 
         let w = e.target.width;
 
@@ -620,45 +624,48 @@ function setupPanzoom() {
         let center = -1 + 2 * x / w;
         window.shift -= center * (1 / z - 1 / window.zoom);
 
-        if (window.zoom != z)
+        if (window.zoom != z) {
             updateMvpData();
+        }
+    }
+
+    img.onload = function (e) {
+        setLineOffset();
+    }
+
+    img.ondragstart = function (e) {
+        e.preventDefault();
     }
 
     img.ondblclick = function (e) {
         reset();
     }
+
+
+    // Draggable line.
+    var x0 = $(img).offset().left;
+    var w = $(img).width();
+    $(line).draggable({
+        axis: "x",
+        containment: "#imgRaster",
+        stop: function (e, ui) {
+            var offset = $(this).offset();
+            var x = offset.left - x0;
+
+            window.params.time = px2time(x)
+            console.log("select time: " + window.params.time.toFixed(3) + " s");
+            setRawImage();
+        }
+    });
 }
 
 
 
-function setupClick() {
-    const img = document.getElementById('imgRaster');
+function setupRaw() {
+    const img = document.getElementById('imgRaw');
 
-    img.onclick = function (e) {
-        // Find the mouse position in normalized coordinates [0, 1].
-        var rect = e.target.getBoundingClientRect();
-        var x = e.clientX - rect.left; //x position within the element.
-        var y = e.clientY - rect.top;  //y position within the element.
-
-
-        let w = e.target.width;
-        let h = e.target.height;
-
-        x /= w;
-        y /= h;
-        x = clamp(x, 0, 1);
-
-        // Take pan and zoom into account.
-        x = .5 * (1 + (-1 + 2 * x) / window.zoom - window.shift);
-
-        // Scale by the duration to get the time.
-        var p = window.params;
-        var duration = p.duration;
-        p.time = x * duration;
-        console.log("select time: ", p.time)
-
-        // Update the raw data image.
-        setRawImage();
+    img.ondragstart = function (e) {
+        e.preventDefault();
     }
 }
 
@@ -690,6 +697,59 @@ function setupWebsocket() {
 
 
 /*************************************************************************************************/
+/*  Raster viewer                                                                                */
+/*************************************************************************************************/
+
+function px2time(px) {
+    const img = document.getElementById('imgRaster');
+    let w = img.width;
+
+    x = px / w;
+    x = clamp(x, 0, 1);
+
+    // Take pan and zoom into account.
+    x = .5 * (1 + (-1 + 2 * x) / window.zoom - window.shift);
+
+    // Scale by the duration to get the time.
+    var p = window.params;
+    var duration = p.duration;
+
+    return x * duration;
+}
+
+
+
+function time2px(t) {
+    const img = document.getElementById('imgRaster');
+    let w = img.width;
+
+    // Scale by the duration to get the time.
+    var p = window.params;
+    var duration = p.duration;
+
+    var x = t / duration;
+    x = .5 * (1 + (x * 2 - 1 + window.shift) * window.zoom)
+    var px = x * w;
+    px = clamp(px, 0, w);
+
+    return px;
+}
+
+
+
+function setLineOffset() {
+    const img = document.getElementById('imgRaster');
+    var x0 = $(img).offset().left;
+    var w = $(img).width();
+
+    const line = document.getElementById('rasterLine');
+    console.log(window.params.time, time2px(window.params.time));
+    $(line).offset({ left: x0 + time2px(window.params.time) });
+}
+
+
+
+/*************************************************************************************************/
 /*  Raw ephys data viewer                                                                        */
 /*************************************************************************************************/
 
@@ -710,10 +770,16 @@ function load() {
 
     setupSliders();
     setupDropdowns();
-    setupPanzoom();
-    setupClick();
+    setupRaster();
+    setupRaw();
     setupWebsocket();
 
     setRawImage();
     updateDuration();
 }
+
+
+
+$(document).ready(function () {
+    load();
+});

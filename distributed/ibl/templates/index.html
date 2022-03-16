@@ -34,6 +34,16 @@
 
     <!-- Javascript -->
 
+    <!-- JQuery -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
+        integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <!-- JQuery UI -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"
+        integrity="sha512-uto9mlQzrs59VwILcLiRYeLKPPbS/bT71da/OEBYEwcdNUk8jYIy+D176RYoop1Da+f9mvkYrmj5MCLZWEtQuA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
     <!-- noUIslider -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.5.1/nouislider.min.js"
         integrity="sha512-T5Bneq9hePRO8JR0S/0lQ7gdW+ceLThvC80UjwkMRz+8q+4DARVZ4dqKoyENC7FcYresjfJ6ubaOgIE35irf4w=="
@@ -61,7 +71,7 @@
 
 </head>
 
-<body onload="load();">
+<body>
 
     <!-- .container is main centered wrapper -->
     <div class="container">
@@ -102,7 +112,10 @@
                     </nav>
                 </div>
                 <div class="eight columns" id="right">
-                    <div><img id="imgRaster" /></div>
+                    <div>
+                        <div id="rasterLine"></div>
+                        <img id="imgRaster" />
+                    </div>
                     <div><img id="imgRaw" /></div>
                 </div>
             </div>

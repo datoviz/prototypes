@@ -26,6 +26,21 @@ logger = logging.getLogger('datoviz')
 
 
 # -------------------------------------------------------------------------------------------------
+# CONSTANTS
+# -------------------------------------------------------------------------------------------------
+
+ROOT_DIR = Path(__file__).parent.resolve()
+DATA_DIR = ROOT_DIR / 'data/rep_site'
+
+WIDTH = 800
+HEIGHT = 600
+
+TIME_HALF_WINDOW = 0.1  # in seconds
+
+PORT = 4321
+
+
+# -------------------------------------------------------------------------------------------------
 # Utils
 # -------------------------------------------------------------------------------------------------
 
@@ -58,19 +73,6 @@ def to_png(arr):
 
 def send_image(img):
     return send_file(to_png(img), mimetype='image/png')
-
-
-# -------------------------------------------------------------------------------------------------
-# CONSTANTS
-# -------------------------------------------------------------------------------------------------
-
-ROOT_DIR = Path(__file__).parent.resolve()
-DATA_DIR = ROOT_DIR / 'data/rep_site'
-
-WIDTH = 800
-HEIGHT = 600
-
-TIME_HALF_WINDOW = 0.1  # in seconds
 
 
 # -------------------------------------------------------------------------------------------------
@@ -300,4 +302,4 @@ def serve_time_float(eid, time=None):
 
 if __name__ == '__main__':
     socketio.on_namespace(RendererNamespace('/'))
-    socketio.run(app, '0.0.0.0', port=3141)
+    socketio.run(app, '0.0.0.0', port=PORT)
