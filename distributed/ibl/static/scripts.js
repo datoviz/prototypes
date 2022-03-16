@@ -639,6 +639,7 @@ function setupRaster() {
         setLineOffset();
     }
     window.onresize = function (e) {
+        line.style.height = (img.offsetHeight - 2) + "px";
         setLineOffset();
     }
 
