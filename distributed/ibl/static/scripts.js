@@ -419,9 +419,10 @@ submit = throttle(submit, 100);
 
 // Update the session duration.
 function updateDuration() {
-    var duration = JS_CONTEXT["durations"][window.params.eid];
-    window.params.duration = duration;
-    document.getElementById("sessionDuration").innerHTML = duration.toFixed(2) + " seconds";
+    var p = window.params;
+    var duration = JS_CONTEXT["durations"][p.eid];
+    p.duration = duration;
+    document.getElementById("sessionDuration").innerHTML = p.time.toFixed(3) + " / " + duration.toFixed(1) + " s";
 }
 
 
@@ -605,18 +606,21 @@ function setupRaster() {
     const img = document.getElementById('imgRaster');
     const line = document.getElementById('rasterLine');
 
+    var x0 = $(img).offset().left;
+    var w = $(img).width();
+
     line.style.height = (img.offsetHeight - 2) + "px";
 
+
+    // Zooming.
     img.onwheel = function (e) {
         e.preventDefault();
         let d = -e.deltaY / Math.abs(e.deltaY);
         let z = window.zoom;
 
-        var rect = e.target.getBoundingClientRect();
+        var rect = img.getBoundingClientRect();
         var x = e.clientX - rect.left; // x position within the element.
         var y = e.clientY - rect.top;  // y position within the element.
-
-        let w = e.target.width;
 
         window.zoom *= (1 + .5 * d);
         window.zoom = Math.max(1, window.zoom);
@@ -629,32 +633,61 @@ function setupRaster() {
         }
     }
 
+
+    // Update the vertical line position upon pan/zoom.
     img.onload = function (e) {
         setLineOffset();
     }
 
+
+    // Prevent image dragging.
     img.ondragstart = function (e) {
         e.preventDefault();
     }
 
+
+    // Panning.
+    var isPanning = false;
+    img.onmousedown = function (e) {
+        isPanning = true;
+    }
+    img.onmousemove = function (e) {
+        if (isPanning) {
+            var x = 2 * e.movementX / (w * window.zoom);
+            window.shift += x;
+
+            updateMvpData();
+        }
+    }
+    document.onmouseup = function (e) {
+        isPanning = false;
+    }
+
+
+    // Reset pan/zoom when double clicking.
     img.ondblclick = function (e) {
         reset();
     }
 
 
-    // Draggable line.
-    var x0 = $(img).offset().left;
-    var w = $(img).width();
+    // Draggable vertical line.
     $(line).draggable({
         axis: "x",
         containment: "#imgRaster",
         stop: function (e, ui) {
+            // When dragging stops, selects the time and update the raw image.
             var offset = $(this).offset();
             var x = offset.left - x0;
 
+            // Update the time.
             window.params.time = px2time(x)
             console.log("select time: " + window.params.time.toFixed(3) + " s");
+
+            // Update the raw image.
             setRawImage();
+
+            // Update the time info.
+            updateDuration();
         }
     });
 }
@@ -743,7 +776,6 @@ function setLineOffset() {
     var w = $(img).width();
 
     const line = document.getElementById('rasterLine');
-    console.log(window.params.time, time2px(window.params.time));
     $(line).offset({ left: x0 + time2px(window.params.time) });
 }
 
