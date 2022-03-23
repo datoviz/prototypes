@@ -8,19 +8,19 @@ const DEFAULT_COLORMAP = 239;
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
 const RAW_DATA_URI = (eid, time) => "/raw/" + eid + "/" + time.toFixed(2);
 
-window.params = {
+const DEFAULT_PARAMS = {
     eid: DEFAULT_EID,
 
-    color: null,
+    color: "cluster",
     colormap: DEFAULT_COLORMAP,
     colormap_range: [0, 1],
     colormap_lims: [0, 1],
 
-    alpha: null,
+    alpha: "",
     alpha_range: [0.1, 0.3],
     alpha_lims: [0.01, 1],
 
-    size: null,
+    size: "",
     size_range: [0.1, 1.5],
     size_lims: [0.01, 10],
 
@@ -30,7 +30,6 @@ window.params = {
     zoom: 1,
     shift: 0,
 };
-
 window.websocket = null;
 
 
@@ -38,6 +37,11 @@ window.websocket = null;
 /*************************************************************************************************/
 /*  Utils                                                                                        */
 /*************************************************************************************************/
+
+function isEmpty(obj) {
+    // https://stackoverflow.com/a/679937/1595060
+    return Object.keys(obj).length === 0;
+}
 
 function throttle(func, wait, options) {
     var context, args, result;
@@ -94,7 +98,12 @@ function clamp(x, min, max) {
 /*************************************************************************************************/
 
 function initSlider(id, initRange, fullRange) {
-    noUiSlider.create(document.getElementById(id), {
+
+    var el = document.getElementById(id);
+    if (el.noUiSlider)
+        el.noUiSlider.destroy();
+
+    noUiSlider.create(el, {
         start: initRange,
         connect: true,
         range: {
@@ -106,7 +115,8 @@ function initSlider(id, initRange, fullRange) {
 };
 
 function onSliderChange(id, callback) {
-    document.getElementById(id).noUiSlider.on('update',
+    var el = document.getElementById(id);
+    el.noUiSlider.on('update',
         function (values, handle, unencoded, tap, positions, noUiSlider) {
             min = parseFloat(values[0]);
             max = parseFloat(values[1]);
@@ -584,13 +594,11 @@ function setupDropdowns() {
         window.params.colormap = parseInt(e.target.value);
         updateParamsData();
     }
-    document.getElementById('selectColormap').value = DEFAULT_COLORMAP;
 
     document.getElementById('selectColor').onchange = function (e) {
         window.params.color = e.target.value;
         updateVertexData(window.params.eid);
     }
-    document.getElementById('selectColor').value = "cluster";
 
     document.getElementById('selectAlpha').onchange = function (e) {
         window.params.alpha = e.target.value;
@@ -600,6 +608,22 @@ function setupDropdowns() {
     document.getElementById('selectSize').onchange = function (e) {
         window.params.size = e.target.value;
         updateVertexData(window.params.eid);
+    }
+
+
+    // Initial values.
+    document.getElementById('selectSize').value = window.params.size;
+    document.getElementById('selectSession').value = window.params.eid;
+    document.getElementById('selectColormap').value = window.params.colormap;
+    document.getElementById('selectColor').value = window.params.color;
+    document.getElementById('selectAlpha').value = window.params.alpha;
+}
+
+
+function setupButtons() {
+    document.getElementById('resetButton').onclick = function (e) {
+        console.log("reset params");
+        resetParams();
     }
 }
 
@@ -755,7 +779,7 @@ function px2time(px) {
     var duration = p.duration;
 
     return x * duration;
-}
+};
 
 
 
@@ -773,7 +797,7 @@ function time2px(t) {
     px = clamp(px, 0, w);
 
     return px;
-}
+};
 
 
 
@@ -784,7 +808,7 @@ function setLineOffset() {
 
     const line = document.getElementById('rasterLine');
     $(line).offset({ left: x0 + time2px(window.params.time) });
-}
+};
 
 
 
@@ -796,7 +820,36 @@ function setRawImage() {
     var url = RAW_DATA_URI(window.params.eid, window.params.time);
     const img = document.getElementById('imgRaw');
     img.src = url;
+};
+
+
+
+/*************************************************************************************************/
+/*  Params browser persistence                                                                   */
+/*************************************************************************************************/
+
+function loadParams() {
+    window.params = JSON.parse(localStorage.params || "{}");
+    if (isEmpty(window.params)) {
+        window.params = DEFAULT_PARAMS;
+    }
+};
+
+function saveParams() {
+    localStorage.params = JSON.stringify(window.params);
+};
+
+function resetParams() {
+    window.params = DEFAULT_PARAMS;
+    saveParams();
+    setupSliders();
+    setupDropdowns();
 }
+
+function setupPersistence() {
+    loadParams();
+    window.onbeforeunload = saveParams;
+};
 
 
 
@@ -807,8 +860,11 @@ function setRawImage() {
 // On load, create the websocket and set the onnopen, onmessage, and onclose callbacks.
 function load() {
 
+    setupPersistence();
+
     setupSliders();
     setupDropdowns();
+    setupButtons();
     setupRaster();
     setupRaw();
     setupWebsocket();
