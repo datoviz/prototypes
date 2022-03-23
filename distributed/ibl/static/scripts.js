@@ -6,6 +6,8 @@
 const COUNT = 1000000; // initial number of spikes
 const DEFAULT_COLORMAP = 239;
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
+const WIDTH = 1024;
+const HEIGHT = 512;
 const RAW_DATA_URI = (eid, time) => "/raw/" + eid + "/" + time.toFixed(2);
 
 const DEFAULT_PARAMS = {
@@ -26,6 +28,7 @@ const DEFAULT_PARAMS = {
 
     time: 0,
     duration: 0,
+    spike_count: 0,
 
     zoom: 1,
     shift: 0,
@@ -253,8 +256,8 @@ function loadJSON() {
                 "type": "board",
                 "id": 1,
                 "content": {
-                    "width": 800,
-                    "height": 600,
+                    "width": WIDTH,
+                    "height": HEIGHT,
                     "background": [255, 255, 255]
                 }
             },
@@ -434,6 +437,10 @@ function updateDuration() {
     var duration = JS_CONTEXT["durations"][p.eid];
     p.duration = duration;
     document.getElementById("sessionDuration").innerHTML = p.time.toFixed(3) + " / " + duration.toFixed(1) + " s";
+
+    var spike_count = JS_CONTEXT["spike_count"][p.eid];
+    p.spike_count = spike_count;
+    document.getElementById("spikeCount").innerHTML = spike_count.toLocaleString();
 }
 
 
