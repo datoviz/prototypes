@@ -34,6 +34,9 @@ ROOT_DIR = Path(__file__).parent.resolve()
 DATA_DIR = ROOT_DIR / 'data/rep_site'
 PORT = 4321
 
+MAX_USERS = 8
+N_USERS = 0
+
 TIME_HALF_WINDOW = 0.1  # in seconds, needs to match HALF_WINDOW in scripts.js
 
 
@@ -244,6 +247,9 @@ def get_context():
 
 @app.route('/')
 def main():
+    global N_USERS
+    if N_USERS >= MAX_USERS:
+        return f"Sorry, maximum number of users reached ({MAX_USERS}), please try again later"
     ctx = get_context()
     return render_template('index.html', sessions=ctx['sessions'], js_context=ctx)
 
@@ -254,12 +260,16 @@ def main():
 
 class RendererNamespace(Namespace):
     def on_connect(self, e):
-        logger.info("Client connected")
+        global N_USERS
+        N_USERS += 1
+        logger.info(f"Client connected {N_USERS}")
         session['renderer'] = Renderer()
 
     def on_disconnect(self):
         logger.info('Client disconnected')
         session.pop('renderer', None)
+        global N_USERS
+        N_USERS -= 1
 
     def on_request(self, msg):
         rnd = session.get('renderer', None)
