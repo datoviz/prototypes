@@ -26,10 +26,10 @@ window.params = {
 
     time: 0,
     duration: 0,
-};
 
-window.zoom = 1;
-window.shift = 0;
+    zoom: 1,
+    shift: 0,
+};
 
 window.websocket = null;
 
@@ -146,7 +146,7 @@ function paramsData() {
     ]);
 
     arr.set(0, "alpha_range", p.alpha_range);
-    arr.set(0, "size_range", [p.size_range[0], scaleSize(window.zoom) * p.size_range[1]]);
+    arr.set(0, "size_range", [p.size_range[0], scaleSize(p.zoom) * p.size_range[1]]);
     arr.set(0, "cmap_range", p.colormap_range);
     arr.set(0, "cmap_id", [p.colormap]);
 
@@ -498,7 +498,7 @@ function updateMvpData() {
                     "offset": 0,
                     "data": {
                         "mode": "base64",
-                        "buffer": mvpData(window.shift, 0, window.zoom, 1)
+                        "buffer": mvpData(window.params.shift, 0, window.params.zoom, 1)
                     }
                 }
             },
@@ -526,8 +526,8 @@ function updateMvpData() {
 
 // Reset the view.
 function reset() {
-    window.zoom = 1;
-    window.shift = 0;
+    window.params.zoom = 1;
+    window.params.shift = 0;
     updateMvpData();
 }
 
@@ -619,19 +619,19 @@ function setupRaster() {
     img.onwheel = function (e) {
         e.preventDefault();
         let d = -e.deltaY / Math.abs(e.deltaY);
-        let z = window.zoom;
+        let z = window.params.zoom;
 
         var rect = img.getBoundingClientRect();
         var x = e.clientX - rect.left; // x position within the element.
         var y = e.clientY - rect.top;  // y position within the element.
 
-        window.zoom *= (1 + .5 * d);
-        window.zoom = Math.max(1, window.zoom);
+        window.params.zoom *= (1 + .5 * d);
+        window.params.zoom = Math.max(1, window.params.zoom);
 
         let center = -1 + 2 * x / w;
-        window.shift -= center * (1 / z - 1 / window.zoom);
+        window.params.shift -= center * (1 / z - 1 / window.params.zoom);
 
-        if (window.zoom != z) {
+        if (window.params.zoom != z) {
             updateMvpData();
         }
     }
@@ -660,8 +660,8 @@ function setupRaster() {
     }
     img.onmousemove = function (e) {
         if (isPanning) {
-            var x = 2 * e.movementX / (w * window.zoom);
-            window.shift += x;
+            var x = 2 * e.movementX / (w * window.params.zoom);
+            window.params.shift += x;
 
             updateMvpData();
         }
@@ -748,7 +748,7 @@ function px2time(px) {
     x = clamp(x, 0, 1);
 
     // Take pan and zoom into account.
-    x = .5 * (1 + (-1 + 2 * x) / window.zoom - window.shift);
+    x = .5 * (1 + (-1 + 2 * x) / window.params.zoom - window.params.shift);
 
     // Scale by the duration to get the time.
     var p = window.params;
@@ -768,7 +768,7 @@ function time2px(t) {
     var duration = p.duration;
 
     var x = t / duration;
-    x = .5 * (1 + (x * 2 - 1 + window.shift) * window.zoom)
+    x = .5 * (1 + (x * 2 - 1 + window.params.shift) * window.params.zoom)
     var px = x * w;
     px = clamp(px, 0, w);
 
