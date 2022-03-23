@@ -133,16 +133,16 @@ def get_array(data):
         arr["pos"][:, 1] = y
 
         # Color feature.
-        arr["cmap_val"][:] = normalize(
-            features[data.session.get('color', None) or None], target='uint8')
+        color = data.session.get('color', None) or 'cluster'
+        arr["cmap_val"][:] = normalize(features[color], target='uint8')
 
         # Alpha feature.
-        arr["alpha"][:] = normalize(
-            features[data.session.get('alpha', None) or None], target='uint8')
+        alpha = data.session.get('alpha', None) or None
+        arr["alpha"][:] = normalize(features[alpha], target='uint8')
 
         # Size feature.
-        arr["size"][:] = normalize(
-            features[data.session.get('size', None) or None], target='uint8')
+        size = data.session.get('size', None) or None
+        arr["size"][:] = normalize(features[size], target='uint8')
 
         return arr
 
@@ -285,7 +285,7 @@ def get_img(eid, time=0):
     path_lossy = path_lossy[0] if path_lossy else None
     if not path_lossy:
         logger.error(f"lossy raw data file does not exist at {path_lossy}")
-        return
+        return np.zeros((1, 1, 3), dtype=np.uint8)
     assert path_lossy.exists()
     lossy = decompress_lossy(path_lossy)
     duration = lossy.duration

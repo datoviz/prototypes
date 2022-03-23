@@ -4,6 +4,7 @@
 /*************************************************************************************************/
 
 const COUNT = 1000000; // initial number of spikes
+const DEFAULT_COLORMAP = 239;
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
 const RAW_DATA_URI = (eid, time) => "/raw/" + eid + "/" + time.toFixed(2);
 
@@ -11,16 +12,16 @@ window.params = {
     eid: DEFAULT_EID,
 
     color: null,
-    colormap: 0,
+    colormap: DEFAULT_COLORMAP,
     colormap_range: [0, 1],
     colormap_lims: [0, 1],
 
     alpha: null,
-    alpha_range: [0.01, 0.1],
+    alpha_range: [0.1, 0.3],
     alpha_lims: [0.01, 1],
 
     size: null,
-    size_range: [0.01, 1],
+    size_range: [0.1, 1.5],
     size_lims: [0.01, 10],
 
     time: 0,
@@ -583,11 +584,13 @@ function setupDropdowns() {
         window.params.colormap = parseInt(e.target.value);
         updateParamsData();
     }
+    document.getElementById('selectColormap').value = DEFAULT_COLORMAP;
 
     document.getElementById('selectColor').onchange = function (e) {
         window.params.color = e.target.value;
         updateVertexData(window.params.eid);
     }
+    document.getElementById('selectColor').value = "cluster";
 
     document.getElementById('selectAlpha').onchange = function (e) {
         window.params.alpha = e.target.value;
