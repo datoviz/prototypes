@@ -297,28 +297,53 @@ def get_img(eid, time=0):
     duration = lossy.duration
     assert duration > 0
 
+    sr = lossy.sample_rate
     dt = TIME_HALF_WINDOW
     t = float(time)
     t = np.clip(t, dt, duration - dt)
 
-    arr = lossy.get(t - dt, t + dt, cast_to_uint8=True).T
+    t0, t1 = t-dt, t+dt
+    arr = lossy.get(t0, t1, cast_to_uint8=True).T
     arr = arr[:, ::-1].copy()
+    ns, nc = arr.shape
+
+    if (session_dir / 'spikes.samples.npy').exists():
+        #
+        # NOTE: TODO, used spikes.samples.npy, NOT times (not syn)
+        # samples = np.load(session_dir / 'spikes.samples.npy', mmap_mode='r')
+        times = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
+        samples = lossy.t2s(times)
+        #
+
+        # Find the spikes in the selected region.
+        s0 = lossy.t2s(t0)
+        s1 = lossy.t2s(t1)
+        i0, i1 = np.searchsorted(samples, np.array([s0, s1]))
+
+        # Load and normalize the spike depths.
+        depths = np.load(session_dir / 'spikes.depths.npy')
+        depths[np.isnan(depths)] = 0
+        m, M = depths.min(), depths.max()
+        depths_n = (depths[i0:i1] - m) / (M - m)
+
+        # Find the spike indices in the image array.
+        cols = np.round(depths_n * nc).astype(np.int64)
+        rows = (samples[i0:i1] - s0).astype(np.int64)
+
+        cols = np.clip(cols, 0, nc - 1)
+        rows = np.clip(rows, 0, ns - 1)
+
+        for i, j in zip(rows, cols):
+            arr[i-3:i+3, j-3:j+3] = 255
+
     return arr
-
-
-@app.route('/raw/<eid>/')
-@cross_origin(supports_credentials=True)
-def serve_default(eid):
-    img = get_img(eid)
-    if img is not None:
-        return send_image(img)
 
 
 @app.route('/raw/<eid>/<time>')
 @cross_origin(supports_credentials=True)
 def serve_time_float(eid, time=None):
-    if not time or time == 'null':
-        time = 0
+    if time == 'null':
+        return ''
     time = float(time)
     img = get_img(eid, time=time)
     if img is not None:
