@@ -8,6 +8,7 @@ const DEFAULT_COLORMAP = 239;
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
 const WIDTH = 1024;
 const HEIGHT = 512;
+const HALF_WINDOW = 0.1;
 const RAW_DATA_URI = (eid, time) => "/raw/" + eid + "/" + time.toFixed(2);
 
 const DEFAULT_PARAMS = {
@@ -746,11 +747,47 @@ function setupRaster() {
 
 
 function setupRaw() {
-    const img = document.getElementById('imgRaw');
+    // const img = document.getElementById('imgRaw');
 
-    img.ondragstart = function (e) {
-        e.preventDefault();
-    }
+    // img.ondragstart = function (e) {
+    //     e.preventDefault();
+    // }
+    var url = RAW_DATA_URI(window.params.eid, window.params.time);
+
+    Plotly.newPlot('imgRaw', [],
+        {
+            images: [
+                {
+                    "source": url,
+                    "xref": "x",
+                    "yref": "y",
+                    "x": 0,
+                    "y": 0,
+                    "sizex": 2 * HALF_WINDOW,
+                    "sizey": 385,
+                    "opacity": 1,
+                    "xanchor": "left",
+                    "yanchor": "bottom",
+                    "sizing": "stretch"
+                },
+            ],
+            xaxis: {
+                range: [0, 2 * HALF_WINDOW],
+                tickmode: "array",
+                tickvals: [0, 0.1, 0.2], // HACK: hard-coded half window
+                ticktext: ['0.000', '0.100', '0.200']
+            },
+            yaxis: {
+                range: [0, 385]
+            },
+            margin: {
+                b: 30, t: 10, l: 30, r: 30, pad: 0
+            },
+            autosize: true,
+        },
+        {
+            scrollZoom: true
+        })
 };
 
 
@@ -839,8 +876,15 @@ function setLineOffset() {
 
 function setRawImage() {
     var url = RAW_DATA_URI(window.params.eid, window.params.time);
-    const img = document.getElementById('imgRaw');
-    img.src = url;
+    // const img = document.getElementById('imgRaw');
+    // img.src = url;
+    var t = window.params.time;
+    var h = HALF_WINDOW;
+
+    Plotly.update('imgRaw', [], {
+        "images[0].source": url,
+        "xaxis.ticktext": [(t - h).toFixed(3), t.toFixed(3), (t + h).toFixed(3)]
+    });
 };
 
 

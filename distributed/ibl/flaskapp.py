@@ -32,13 +32,9 @@ logger = logging.getLogger('datoviz')
 
 ROOT_DIR = Path(__file__).parent.resolve()
 DATA_DIR = ROOT_DIR / 'data/rep_site'
-
-WIDTH = 800
-HEIGHT = 600
-
-TIME_HALF_WINDOW = 0.1  # in seconds
-
 PORT = 4321
+
+TIME_HALF_WINDOW = 0.1  # in seconds, needs to match HALF_WINDOW in scripts.js
 
 
 # -------------------------------------------------------------------------------------------------

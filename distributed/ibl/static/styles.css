@@ -21,29 +21,34 @@ html.wait, html.wait * { cursor: wait !important; }
 
 #left ol {
     list-style-type: none;
-}
-
-#left li label {
-    padding-left: 10px;
-    font-weight: bold;
-}
-
-#left li span {
-    padding-left: 10px;
-}
-
-#left ol {
-    padding-bottom: 16px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
     border-bottom: 1px solid #888;
 }
 
 #left ol select {
     background-color: #eaeaea;
+    margin-bottom: 8px;
 }
 
 #left ol input {
     background-color: #eaeaea;
     width: 100%;
+    margin-bottom: 0;
+}
+
+#left ol li {
+    margin-bottom: 8px;
+}
+
+#left li label {
+    padding: 0 0 0 10px;
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+#left li span {
+    padding-left: 10px;
 }
 
 
@@ -66,7 +71,7 @@ html.wait, html.wait * { cursor: wait !important; }
 /*************************************************************************************************/
 
 .noUi-target {
-    margin: 0 20px 30px 10px;
+    margin: 0 20px 10px 10px;
 }
 
 .noUi-base,
