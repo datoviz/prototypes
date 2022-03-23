@@ -9,6 +9,7 @@ import io
 import traceback
 
 import numpy as np
+import pandas as pd
 import png
 from flask import Flask, render_template, send_file, session
 from flask_cors import CORS, cross_origin
@@ -84,7 +85,6 @@ def get_array(data):
         r = base64.decodebytes(data.buffer.encode('ascii'))
         return np.frombuffer(r, dtype=np.uint8)
     elif data.mode == 'ibl_ephys':
-
         # Retrieve the requested session eid.
         data.session = Bunch(data.session)
         eid = data.session.eid
@@ -96,6 +96,12 @@ def get_array(data):
         spike_clusters = np.load(session_dir / 'spikes.clusters.npy')
         spike_amps = np.load(session_dir / 'spikes.amps.npy')
         n = len(spike_times)
+
+        # Cluster metrics
+        metrics = pd.read_parquet(session_dir / 'clusters.metrics.pqt')
+        metrics = metrics.reindex(metrics['cluster_id'])
+        quality = metrics.label == 1
+        spike_quality = quality[spike_clusters].values.astype(np.uint8)
 
         spike_depths[np.isnan(spike_depths)] = 0
 
@@ -110,31 +116,33 @@ def get_array(data):
             ('size', np.uint8)
         ])
 
+        # Available features.
+        features = {
+            'time': spike_times,
+            'cluster': spike_clusters,
+            'depth': spike_depths,
+            'amplitude': spike_amps,
+            'quality': spike_quality,
+            None: np.ones(n),
+        }
+
         # Generate the position data.
         x = normalize(spike_times)
         y = normalize(spike_depths)
         arr["pos"][:, 0] = x
         arr["pos"][:, 1] = y
 
-        features = {
-            'time': spike_times,
-            'cluster': spike_clusters,
-            'depth': spike_depths,
-            'amplitude': spike_amps,
-            None: np.ones(n),
-        }
-
         # Color feature.
         arr["cmap_val"][:] = normalize(
-            features[data.session.color or None], target='uint8')
+            features[data.session.get('color', None) or None], target='uint8')
 
         # Alpha feature.
         arr["alpha"][:] = normalize(
-            features[data.session.alpha or None], target='uint8')
+            features[data.session.get('alpha', None) or None], target='uint8')
 
         # Size feature.
         arr["size"][:] = normalize(
-            features[data.session.size or None], target='uint8')
+            features[data.session.get('size', None) or None], target='uint8')
 
         return arr
 
@@ -314,3 +322,9 @@ def serve_time_float(eid, time=None):
 if __name__ == '__main__':
     socketio.on_namespace(RendererNamespace('/'))
     socketio.run(app, '0.0.0.0', port=PORT)
+
+    # arr = get_array(
+    #     Bunch({'mode': 'ibl_ephys', 'session': {
+    #         'eid': '0851db85-2889-4070-ac18-a40e8ebd96ba'}
+    #     })
+    # )
