@@ -44,7 +44,9 @@ window.websocket = null;
 function isEmpty(obj) {
     // https://stackoverflow.com/a/679937/1595060
     return Object.keys(obj).length === 0;
-}
+};
+
+
 
 function throttle(func, wait, options) {
     var context, args, result;
@@ -78,17 +80,23 @@ function throttle(func, wait, options) {
     };
 };
 
+
+
 // Display an array buffer.
 function show(arrbuf) {
     const blob = new Blob([arrbuf]);
     const url = URL.createObjectURL(blob);
     const img = document.getElementById('imgRaster');
     img.src = url;
-}
+};
+
+
 
 function scaleSize(x) {
     return 1 + Math.log(x);
-}
+};
+
+
 
 function clamp(x, min, max) {
     return Math.min(Math.max(x, min), max);
@@ -117,6 +125,8 @@ function initSlider(id, initRange, fullRange) {
     });
 };
 
+
+
 function onSliderChange(id, callback) {
     var el = document.getElementById(id);
     el.noUiSlider.on('update',
@@ -125,7 +135,7 @@ function onSliderChange(id, callback) {
             max = parseFloat(values[1]);
             callback(min, max);
         });
-}
+};
 
 
 
@@ -142,8 +152,7 @@ function vertexData() {
         alpha: p.alpha,
         size: p.size,
     };
-}
-
+};
 
 
 
@@ -164,7 +173,7 @@ function paramsData() {
     arr.set(0, "cmap_id", [p.colormap]);
 
     return arr.b64();
-}
+};
 
 
 
@@ -196,7 +205,7 @@ function mvpData(px, py, zx, zy) {
     arr.set(0, "time", [0]);
 
     return arr.b64();
-}
+};
 
 
 
@@ -242,7 +251,7 @@ function recordJSON() {
             "id": 1
         }
     ];
-}
+};
 
 
 
@@ -412,7 +421,7 @@ function loadJSON() {
     };
     requests["requests"].push(...recordJSON());
     return requests;
-}
+};
 
 
 
@@ -425,7 +434,7 @@ function submit(contents) {
     if (!window.websocket) return;
     if (!window.websocket.connected) return;
     window.websocket.emit("request", contents);
-}
+};
 
 submit = throttle(submit, 100);
 
@@ -441,7 +450,7 @@ function updateDuration() {
     var spike_count = JS_CONTEXT["spike_count"][p.eid];
     p.spike_count = spike_count;
     document.getElementById("spikeCount").innerHTML = spike_count.toLocaleString();
-}
+};
 
 
 
@@ -468,11 +477,12 @@ function updateVertexData(eid) {
         ]
     };
     requests["requests"].push(...recordJSON());
+    document.documentElement.className = 'wait';
     submit(requests);
 
     // Update the session duration.
     updateDuration();
-}
+};
 
 
 
@@ -496,7 +506,7 @@ function updateParamsData() {
         ]
     };
     submit(contents);
-}
+};
 
 
 
@@ -537,7 +547,7 @@ function updateMvpData() {
     };
 
     submit(req);
-}
+};
 
 
 
@@ -546,7 +556,7 @@ function reset() {
     window.params.zoom = 1;
     window.params.shift = 0;
     updateMvpData();
-}
+};
 
 
 
@@ -587,7 +597,7 @@ function setupSliders() {
         updateParamsData();
     });
 
-}
+};
 
 
 
@@ -595,6 +605,7 @@ function setupDropdowns() {
 
     document.getElementById('selectSession').onchange = function (e) {
         updateVertexData(e.target.value);
+        setRawImage();
     }
 
     document.getElementById('selectColormap').onchange = function (e) {
@@ -624,7 +635,8 @@ function setupDropdowns() {
     document.getElementById('selectColormap').value = window.params.colormap;
     document.getElementById('selectColor').value = window.params.color;
     document.getElementById('selectAlpha').value = window.params.alpha;
-}
+};
+
 
 
 function setupButtons() {
@@ -632,13 +644,14 @@ function setupButtons() {
         console.log("reset params");
         resetParams();
     }
-}
+};
 
 
 
 function setupRaster() {
     const img = document.getElementById('imgRaster');
     const line = document.getElementById('rasterLine');
+    document.documentElement.className = 'wait';
 
     var x0 = $(img).offset().left;
     var w = $(img).width();
@@ -728,7 +741,7 @@ function setupRaster() {
             updateDuration();
         }
     });
-}
+};
 
 
 
@@ -738,7 +751,7 @@ function setupRaw() {
     img.ondragstart = function (e) {
         e.preventDefault();
     }
-}
+};
 
 
 
@@ -756,6 +769,7 @@ function setupWebsocket() {
         // display the received image
         let img = data["image"];
         if (img instanceof ArrayBuffer) {
+            document.documentElement.className = '';
             show(img);
         }
     });
@@ -763,7 +777,7 @@ function setupWebsocket() {
     window.websocket.on("disconnect", () => {
         console.log('socket disconnected');
     });
-}
+};
 
 
 
@@ -842,16 +856,22 @@ function loadParams() {
     }
 };
 
+
+
 function saveParams() {
     localStorage.params = JSON.stringify(window.params);
 };
+
+
 
 function resetParams() {
     window.params = DEFAULT_PARAMS;
     saveParams();
     setupSliders();
     setupDropdowns();
-}
+};
+
+
 
 function setupPersistence() {
     loadParams();
@@ -878,7 +898,7 @@ function load() {
 
     setRawImage();
     updateDuration();
-}
+};
 
 
 
