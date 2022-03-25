@@ -8,8 +8,10 @@ const DEFAULT_COLORMAP = 239;
 const DEFAULT_EID = "0851db85-2889-4070-ac18-a40e8ebd96ba";
 const WIDTH = 1024;
 const HEIGHT = 512;
+const MARKER_SIZE = 8;
 const HALF_WINDOW = 0.1;
-const RAW_DATA_URI = (eid, time) => "/raw/" + eid + "/" + time.toFixed(2);
+const RAW_DATA_URI = (eid, time) => "/" + eid + "/raw/" + time.toFixed(2);
+const SPIKES_DATA_URI = (eid, time) => "/" + eid + "/spikes/" + time.toFixed(2);
 
 const DEFAULT_PARAMS = {
     eid: DEFAULT_EID,
@@ -754,7 +756,12 @@ function setupRaw() {
     // }
     var url = RAW_DATA_URI(window.params.eid, window.params.time);
 
-    Plotly.newPlot('imgRaw', [],
+    const spikes = {
+        mode: 'markers',
+        type: 'scatter',
+        hovertemplate: "cluster %{text}<extra></extra>"
+    };
+    Plotly.newPlot('imgRaw', [spikes],
         {
             images: [
                 {
@@ -768,17 +775,20 @@ function setupRaw() {
                     "opacity": 1,
                     "xanchor": "left",
                     "yanchor": "bottom",
-                    "sizing": "stretch"
+                    "sizing": "stretch",
+                    "layer": "below",
                 },
             ],
             xaxis: {
                 range: [0, 2 * HALF_WINDOW],
                 tickmode: "array",
                 tickvals: [0, 0.1, 0.2], // HACK: hard-coded half window
-                ticktext: ['0.000', '0.100', '0.200']
+                ticktext: ['0.000', '0.100', '0.200'],
+                showgrid: false,
             },
             yaxis: {
-                range: [0, 385]
+                range: [0, 385],
+                showgrid: false,
             },
             margin: {
                 b: 30, t: 10, l: 30, r: 30, pad: 0
@@ -876,15 +886,25 @@ function setLineOffset() {
 
 function setRawImage() {
     var url = RAW_DATA_URI(window.params.eid, window.params.time);
-    // const img = document.getElementById('imgRaw');
-    // img.src = url;
     var t = window.params.time;
     var h = HALF_WINDOW;
+    var t0 = t - h;
+    var t1 = t + h;
 
-    Plotly.update('imgRaw', [], {
-        "images[0].source": url,
-        "xaxis.ticktext": [(t - h).toFixed(3), t.toFixed(3), (t + h).toFixed(3)]
+    $.ajax({
+        url: SPIKES_DATA_URI(window.params.eid, window.params.time),
+    }).done(function (data) {
+        Plotly.update('imgRaw', {
+            x: [data.x],
+            y: [data.y],
+            marker: [{ size: MARKER_SIZE, symbol: 'x', color: data.spike_clusters }],
+            text: [data.spike_clusters],
+        }, {
+            "images[0].source": url,
+            "xaxis.ticktext": [t0.toFixed(3), t.toFixed(3), t1.toFixed(3)],
+        });
     });
+
 };
 
 

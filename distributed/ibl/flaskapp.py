@@ -6,6 +6,7 @@ import base64
 from pathlib import Path
 import logging
 import io
+import json
 import traceback
 
 import numpy as np
@@ -33,6 +34,7 @@ logger = logging.getLogger('datoviz')
 ROOT_DIR = Path(__file__).parent.resolve()
 DATA_DIR = ROOT_DIR / 'data/rep_site'
 PORT = 4321
+SAMPLE_RATE = 3e4  # HACK NOTE: we assume the sample rate to be fixed here!
 
 MAX_USERS = 8
 N_USERS = 0
@@ -345,7 +347,71 @@ def get_img(eid, time=0):
     return arr
 
 
-@app.route('/raw/<eid>/<time>')
+def t2s(t):
+    return np.round(t * SAMPLE_RATE).astype(np.uint64)
+
+
+def s2t(s):
+    return s / float(SAMPLE_RATE)
+
+
+def get_spikes(eid, time=0):
+    time = float(time)
+    assert 0 <= time <= 1e6
+
+    session_dir = DATA_DIR / eid
+
+    # NOTE: TODO, used spikes.samples.npy, NOT times (not syn)
+    # samples = np.load(session_dir / 'spikes.samples.npy', mmap_mode='r')
+    times = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
+    samples = t2s(times)
+
+    # Estimate the duration.
+    duration = times[-1] + 1
+
+    dt = TIME_HALF_WINDOW
+    t = float(time)
+    t = np.clip(t, dt, duration - dt)
+    t0, t1 = t-dt, t+dt
+
+    # Find the spikes in the selected region.
+    s0 = t2s(t0)
+    s1 = t2s(t1)
+    i0, i1 = np.searchsorted(samples, np.array([s0, s1]))
+
+    # Prepare the output arrays.
+    spike_times = times[i0:i1]
+    spike_samples = samples[i0:i1]
+
+    depths = np.load(session_dir / 'spikes.depths.npy')
+    depths[np.isnan(depths)] = 0
+    spike_depths = depths[i0:i1]
+
+    sc = np.load(session_dir / 'spikes.clusters.npy', mmap_mode='r')
+    spike_clusters = sc[i0:i1]
+
+    cc = np.load(session_dir / 'clusters.channels.npy', mmap_mode='r')
+    spike_channels = cc[spike_clusters]
+
+    # Coordinates on the plot.
+    x = spike_times - t0
+    y = spike_channels
+
+    d = dict(
+        spike_times=np.around(spike_times, decimals=3).tolist(),
+        spike_samples=np.around(spike_samples).tolist(),
+        spike_clusters=np.around(spike_clusters).tolist(),
+        spike_depths=np.around(spike_depths, decimals=3).tolist(),
+        spike_channels=np.around(spike_channels).tolist(),
+        x=np.around(x, decimals=3).tolist(),
+        y=np.around(y, decimals=3).tolist(),
+    )
+
+    # return json.dumps(d, indent=1, sort_keys=True)
+    return d
+
+
+@app.route('/<eid>/raw/<time>')
 @cross_origin(supports_credentials=True)
 def serve_time_float(eid, time=None):
     if time == 'null':
@@ -354,6 +420,15 @@ def serve_time_float(eid, time=None):
     img = get_img(eid, time=time)
     if img is not None:
         return send_image(img)
+
+
+@app.route('/<eid>/spikes/<time>')
+@cross_origin(supports_credentials=True)
+def get_spikes_in_window(eid, time=None):
+    if time == 'null':
+        return ''
+    time = float(time)
+    return get_spikes(eid, time=time)
 
 
 if __name__ == '__main__':
