@@ -322,7 +322,7 @@ def get_img(eid, time=0):
 
     t0, t1 = t-dt, t+dt
     arr = lossy.get(t0, t1, cast_to_uint8=True).T
-    arr = arr[:, ::-1].copy()
+    arr = arr[::-1, ::+1].copy()
     ns, nc = arr.shape
 
     # if (session_dir / 'spikes.samples.npy').exists():
