@@ -325,34 +325,34 @@ def get_img(eid, time=0):
     arr = arr[:, ::-1].copy()
     ns, nc = arr.shape
 
-    if (session_dir / 'spikes.samples.npy').exists():
-        #
-        # NOTE: TODO, used spikes.samples.npy, NOT times (not syn)
-        # samples = np.load(session_dir / 'spikes.samples.npy', mmap_mode='r')
-        times = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
-        samples = lossy.t2s(times)
-        #
+    # if (session_dir / 'spikes.samples.npy').exists():
+    #     #
+    #     # NOTE: TODO, used spikes.samples.npy, NOT times (not syn)
+    #     # samples = np.load(session_dir / 'spikes.samples.npy', mmap_mode='r')
+    #     times = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
+    #     samples = lossy.t2s(times)
+    #     #
 
-        # Find the spikes in the selected region.
-        s0 = lossy.t2s(t0)
-        s1 = lossy.t2s(t1)
-        i0, i1 = np.searchsorted(samples, np.array([s0, s1]))
+    #     # Find the spikes in the selected region.
+    #     s0 = lossy.t2s(t0)
+    #     s1 = lossy.t2s(t1)
+    #     i0, i1 = np.searchsorted(samples, np.array([s0, s1]))
 
-        # Load and normalize the spike depths.
-        depths = np.load(session_dir / 'spikes.depths.npy')
-        depths[np.isnan(depths)] = 0
-        m, M = depths.min(), depths.max()
-        depths_n = (depths[i0:i1] - m) / (M - m)
+    #     # Load and normalize the spike depths.
+    #     depths = np.load(session_dir / 'spikes.depths.npy')
+    #     depths[np.isnan(depths)] = 0
+    #     m, M = depths.min(), depths.max()
+    #     depths_n = (depths[i0:i1] - m) / (M - m)
 
-        # Find the spike indices in the image array.
-        cols = np.round(depths_n * nc).astype(np.int64)
-        rows = (samples[i0:i1] - s0).astype(np.int64)
+    #     # Find the spike indices in the image array.
+    #     cols = np.round(depths_n * nc).astype(np.int64)
+    #     rows = (samples[i0:i1] - s0).astype(np.int64)
 
-        cols = np.clip(cols, 0, nc - 1)
-        rows = np.clip(rows, 0, ns - 1)
+    #     cols = np.clip(cols, 0, nc - 1)
+    #     rows = np.clip(rows, 0, ns - 1)
 
-        for i, j in zip(rows, cols):
-            arr[i-3:i+3, j-3:j+3] = 255
+    #     for i, j in zip(rows, cols):
+    #         arr[i-3:i+3, j-3:j+3] = 255
 
     return arr
 
@@ -371,10 +371,13 @@ def get_spikes(eid, time=0):
 
     session_dir = DATA_DIR / eid
 
-    # NOTE: TODO, used spikes.samples.npy, NOT times (not syn)
-    # samples = np.load(session_dir / 'spikes.samples.npy', mmap_mode='r')
-    times = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
-    samples = t2s(times)
+    fn_samples = session_dir / 'spikes.samples.npy'
+    if not fn_samples.exists():
+        times = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
+        samples = t2s(times)
+    else:
+        samples = np.load(fn_samples, mmap_mode='r')
+        times = s2t(samples)
 
     # Estimate the duration.
     duration = times[-1] + 1
