@@ -12,6 +12,7 @@ const MARKER_SIZE = 8;
 const HALF_WINDOW = 0.1;
 const RAW_DATA_URI = (eid, time) => "/" + eid + "/raw/" + time.toFixed(2);
 const SPIKES_DATA_URI = (eid, time) => "/" + eid + "/spikes/" + time.toFixed(2);
+const CLUSTER_DATA_URI = (eid, cluster) => "/" + eid + "/cluster/" + cluster;
 
 const DEFAULT_PARAMS = {
     eid: DEFAULT_EID,
@@ -32,6 +33,7 @@ const DEFAULT_PARAMS = {
     time: 0,
     duration: 0,
     spike_count: 0,
+    cluster: 0,
 
     zoom: 1,
     shift: 0,
@@ -611,6 +613,11 @@ function setupDropdowns() {
         setRawImage();
     }
 
+    document.getElementById('clusterInput').onchange = function (e) {
+        window.params.cluster = parseInt(e.target.value);
+        setClusterImage();
+    }
+
     document.getElementById('selectColormap').onchange = function (e) {
         window.params.colormap = parseInt(e.target.value);
         updateParamsData();
@@ -749,11 +756,6 @@ function setupRaster() {
 
 
 function setupRaw() {
-    // const img = document.getElementById('imgRaw');
-
-    // img.ondragstart = function (e) {
-    //     e.preventDefault();
-    // }
     var url = RAW_DATA_URI(window.params.eid, window.params.time);
 
     const spikes = {
@@ -799,6 +801,16 @@ function setupRaw() {
             scrollZoom: true
         })
 };
+
+
+
+function setupCluster() {
+    const img = document.getElementById('imgCluster');
+
+    img.ondragstart = function (e) {
+        e.preventDefault();
+    }
+}
 
 
 
@@ -910,6 +922,18 @@ function setRawImage() {
 
 
 /*************************************************************************************************/
+/*  Cluster plot                                                                                 */
+/*************************************************************************************************/
+
+function setClusterImage() {
+    var url = CLUSTER_DATA_URI(window.params.eid, window.params.cluster);
+    const img = document.getElementById('imgCluster');
+    img.src = url;
+};
+
+
+
+/*************************************************************************************************/
 /*  Params browser persistence                                                                   */
 /*************************************************************************************************/
 
@@ -958,6 +982,7 @@ function load() {
     setupButtons();
     setupRaster();
     setupRaw();
+    setupCluster();
     setupWebsocket();
 
     setRawImage();

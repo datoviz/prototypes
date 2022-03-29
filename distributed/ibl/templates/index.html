@@ -90,12 +90,16 @@
                         <ol>
                             {{ macros.select_session() }}
                             <li>
-                                <label>time / duration</label>
+                                <label for="sessionDuration">time / duration</label>
                                 <span id="sessionDuration"></span>
                             </li>
                             <li>
-                                <label>spikes</label>
+                                <label for="spikeCount">spikes</label>
                                 <span id="spikeCount"></span>
+                            </li>
+                            <li>
+                                <label for="clusterInput">cluster</label>
+                                <input id="clusterInput" type="number">
                             </li>
                         </ol>
 
@@ -127,10 +131,13 @@
                 <div class="nine columns" id="right">
                     <div>
                         <div id="rasterLine"></div>
-                        <img id="imgRaster" />
+                        <img id="imgRaster">
                     </div>
                     <div>
                         <div id="imgRaw"></div>
+                    </div>
+                    <div>
+                        <img id="imgCluster">
                     </div>
                 </div>
             </div>

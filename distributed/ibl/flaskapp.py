@@ -465,7 +465,7 @@ def cluster_plot(eid, cluster_id):
     sd = spike_depths[ind]
     sa = spike_amps[ind] * 1e3
 
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    fig, ax = plt.subplots(1, 1, figsize=(8, 4))
     ax.plot(st, sa, ',')
     ax.set_xlim(0, duration)
     ax.set_xlabel('time (s)')
@@ -474,7 +474,9 @@ def cluster_plot(eid, cluster_id):
     ax.set_title(f'spike amplitudes (cluster {cluster_id:04d})')
     fig.tight_layout()
 
-    return send_figure(fig)
+    out = send_figure(fig)
+    plt.close(fig)
+    return out
 
 
 if __name__ == '__main__':
