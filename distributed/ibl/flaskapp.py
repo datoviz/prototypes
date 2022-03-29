@@ -449,7 +449,9 @@ def cluster_plot(eid, cluster_id):
     cluster_id = int(cluster_id)
 
     assert eid
-    assert cluster_id >= 0
+    if cluster_id is None or not cluster_id >= 0:
+        logger.warning(f"invalid cluster number {cluster_id}")
+        return ''
 
     session_dir = DATA_DIR / eid
     spike_clusters = np.load(

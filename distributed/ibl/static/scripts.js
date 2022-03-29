@@ -799,13 +799,25 @@ function setupRaw() {
         },
         {
             scrollZoom: true
-        })
+        });
+    var myPlot = document.getElementById("imgRaw");
+
+    myPlot.on('plotly_click', function (data) {
+        var cluster = 0;
+        for (var i = 0; i < data.points.length; i++) {
+            var cluster = data.points[i].data.text[data.points[i].pointNumber];
+            window.params.cluster = cluster;
+            document.getElementById("clusterInput").value = cluster;
+            setClusterImage();
+        };
+    });
 };
 
 
 
 function setupCluster() {
     const img = document.getElementById('imgCluster');
+    img.value = window.params.cluster;
 
     img.ondragstart = function (e) {
         e.preventDefault();
