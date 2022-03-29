@@ -11,6 +11,8 @@ import traceback
 
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import png
 from flask import Flask, render_template, send_file, session
 from flask_cors import CORS, cross_origin
@@ -21,10 +23,11 @@ from mtscomp.lossy import decompress_lossy
 
 
 # -------------------------------------------------------------------------------------------------
-# Logger
+# Settings
 # -------------------------------------------------------------------------------------------------
 
 logger = logging.getLogger('datoviz')
+mpl.style.use('seaborn')
 
 
 # -------------------------------------------------------------------------------------------------
@@ -75,6 +78,13 @@ def to_png(arr):
 
 def send_image(img):
     return send_file(to_png(img), mimetype='image/png')
+
+
+def send_figure(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf)
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
 
 
 # -------------------------------------------------------------------------------------------------
@@ -429,6 +439,42 @@ def get_spikes_in_window(eid, time=None):
         return ''
     time = float(time)
     return get_spikes(eid, time=time)
+
+
+@app.route('/<eid>/cluster/<cluster_id>')
+@cross_origin(supports_credentials=True)
+def cluster_plot(eid, cluster_id):
+    if cluster_id == 'null':
+        return ''
+    cluster_id = int(cluster_id)
+
+    assert eid
+    assert cluster_id >= 0
+
+    session_dir = DATA_DIR / eid
+    spike_clusters = np.load(
+        session_dir / 'spikes.clusters.npy', mmap_mode='r')
+    spike_times = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
+    spike_depths = np.load(session_dir / 'spikes.depths.npy', mmap_mode='r')
+    spike_amps = np.load(session_dir / 'spikes.amps.npy', mmap_mode='r')
+
+    duration = spike_times[-1] + 1
+
+    ind = np.isin(spike_clusters, [cluster_id])
+    st = spike_times[ind]
+    sd = spike_depths[ind]
+    sa = spike_amps[ind] * 1e3
+
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    ax.plot(st, sa, ',')
+    ax.set_xlim(0, duration)
+    ax.set_xlabel('time (s)')
+    ax.set_ylabel('amplitude (mV)')
+    ax.set_ylim(0)
+    ax.set_title(f'spike amplitudes (cluster {cluster_id:04d})')
+    fig.tight_layout()
+
+    return send_figure(fig)
 
 
 if __name__ == '__main__':
