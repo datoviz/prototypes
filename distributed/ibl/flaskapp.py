@@ -10,6 +10,7 @@ import json
 import traceback
 
 import numpy as np
+from scipy.signal import butter, sosfilt
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -38,6 +39,7 @@ ROOT_DIR = Path(__file__).parent.resolve()
 DATA_DIR = ROOT_DIR / 'data/rep_site'
 PORT = 4321
 SAMPLE_RATE = 3e4  # HACK NOTE: we assume the sample rate to be fixed here!
+HP_FILTER_FREQ = 300  # 300 Hz high-pass filter
 
 MAX_USERS = 8
 N_USERS = 0
@@ -85,6 +87,11 @@ def send_figure(fig):
     fig.savefig(buf)
     buf.seek(0)
     return send_file(buf, mimetype='image/png')
+
+
+def hpfilter(arr, freq=HP_FILTER_FREQ):
+    sos = butter(3, freq, fs=SAMPLE_RATE,  btype='highpass', output='sos')
+    return sosfilt(sos, arr, axis=1)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -321,7 +328,7 @@ def get_img(eid, time=0):
     t = np.clip(t, dt, duration - dt)
 
     t0, t1 = t-dt, t+dt
-    arr = lossy.get(t0, t1, cast_to_uint8=True).T
+    arr = lossy.get(t0, t1, filter=hpfilter, cast_to_uint8=True).T
     arr = arr[::-1, ::+1].copy()
     ns, nc = arr.shape
 

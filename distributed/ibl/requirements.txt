@@ -4,3 +4,4 @@ flask-socketio
 gevent-websocket
 eventlet
 pypng
+pyarrow
