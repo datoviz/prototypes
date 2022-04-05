@@ -5,3 +5,4 @@ gevent-websocket
 eventlet
 pypng
 pyarrow
+scipy
