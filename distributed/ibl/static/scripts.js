@@ -672,7 +672,15 @@ function setupRaster() {
     // Zooming.
     img.onwheel = function (e) {
         e.preventDefault();
+        if (e.deltaY == 0)
+            return;
         let d = -e.deltaY / Math.abs(e.deltaY);
+
+        // macOS hack
+        var isTouchPad = e.wheelDeltaY ? e.wheelDeltaY === -3 * e.deltaY : e.deltaMode === 0
+        if (isTouchPad)
+            d = d * .05;
+
         let z = window.params.zoom;
 
         var rect = img.getBoundingClientRect();
