@@ -810,6 +810,10 @@ function setupRaw() {
         });
     var myPlot = document.getElementById("imgRaw");
 
+    myPlot.onwheel = function (e) {
+        return e.preventDefault();
+    };
+
     myPlot.on('plotly_click', function (data) {
         var cluster = 0;
         for (var i = 0; i < data.points.length; i++) {
