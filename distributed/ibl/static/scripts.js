@@ -790,6 +790,20 @@ function setupRaw() {
         type: 'scatter',
         hovertemplate: "cluster %{text}<extra></extra>"
     };
+
+    var iconLeft = {
+        'width': 1792,
+        'height': 1792,
+        'path': 'M1664 896v128q0 53-32.5 90.5t-84.5 37.5h-704l293 294q38 36 38 90t-38 90l-75 76q-37 37-90 37-52 0-91-37l-651-652q-37-37-37-90 0-52 37-91l651-650q38-38 91-38 52 0 90 38l75 74q38 38 38 91t-38 91l-293 293h704q52 0 84.5 37.5t32.5 90.5z',
+        'transform': "matrix(1 0 0 -1 0 1850)"
+    }
+    var iconRight = {
+        'width': 1792,
+        'height': 1792,
+        'path': 'M1600 960q0 54-37 91l-651 651q-39 37-91 37-51 0-90-37l-75-75q-38-38-38-91t38-91l293-293h-704q-52 0-84.5-37.5t-32.5-90.5v-128q0-53 32.5-90.5t84.5-37.5h704l-293-294q-38-36-38-90t38-90l75-75q38-38 90-38 53 0 91 38l651 651q37 35 37 90z',
+        'transform': "matrix(1 0 0 -1 0 1850)"
+    }
+
     Plotly.newPlot('imgRaw', [spikes],
         {
             images: [
@@ -825,7 +839,22 @@ function setupRaw() {
             autosize: true,
         },
         {
-            scrollZoom: true
+            scrollZoom: true,
+            modeBarButtonsToAdd: [
+                {
+                    name: 'goLeft',
+                    icon: iconLeft,
+                    direction: 'up',
+                    click: function (gd) { shiftRaw(-.05); }
+                },
+                {
+                    name: 'goRight',
+                    icon: iconRight,
+                    direction: 'up',
+                    click: function (gd) { shiftRaw(+.05); }
+                }
+            ],
+            modeBarButtonsToRemove: ["select2d", "lasso2d"]
         });
     var myPlot = document.getElementById("imgRaw");
 
@@ -938,6 +967,14 @@ function setLineOffset() {
 /*************************************************************************************************/
 /*  Raw ephys data viewer                                                                        */
 /*************************************************************************************************/
+
+function shiftRaw(dt) {
+    window.params.time += dt;
+    setRawImage();
+    setLineOffset();
+}
+
+
 
 function setRawImage() {
     var url = RAW_DATA_URI(window.params.eid, window.params.time);

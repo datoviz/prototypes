@@ -2,7 +2,10 @@
 /*  Global                                                                                       */
 /*************************************************************************************************/
 
-html.wait, html.wait * { cursor: wait !important; }
+html.wait,
+html.wait * {
+    cursor: wait !important;
+}
 
 
 
@@ -16,6 +19,7 @@ html.wait, html.wait * { cursor: wait !important; }
     position: relative;
     top: -20px;
 }
+
 #titleLinks a {
     padding: 0 10px;
 }
@@ -83,6 +87,7 @@ html.wait, html.wait * { cursor: wait !important; }
 
 #imgRaster {
     aspect-ratio: 2/1;
+    cursor: grabbing;
 }
 
 #imgCluster {
