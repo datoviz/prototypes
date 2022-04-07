@@ -448,11 +448,11 @@ submit = throttle(submit, 100);
 // Update the session duration.
 function updateDuration() {
     var p = window.params;
-    var duration = JS_CONTEXT["durations"][p.eid];
+    var duration = JS_CONTEXT["sessions"][p.eid]["duration"];
     p.duration = duration;
     document.getElementById("sessionDuration").innerHTML = p.time.toFixed(3) + " / " + duration.toFixed(1) + " s";
 
-    var spike_count = JS_CONTEXT["spike_count"][p.eid];
+    var spike_count = JS_CONTEXT["sessions"][p.eid]["spike_count"];
     p.spike_count = spike_count;
     document.getElementById("spikeCount").innerHTML = spike_count.toLocaleString();
 };

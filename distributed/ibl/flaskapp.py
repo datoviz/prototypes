@@ -6,7 +6,7 @@ import base64
 from pathlib import Path
 import logging
 import io
-import json
+from math import ceil
 import traceback
 
 import numpy as np
@@ -243,24 +243,27 @@ socketio = SocketIO(app)
 # Serving the HTML page
 # -------------------------------------------------------------------------------------------------
 
-def get_spike_count_duration(session):
-    st = np.load(DATA_DIR / session / 'spikes.times.npy', mmap_mode='r')
-    return st.size, st[-1] + 1
+def get_session_info(session):
+    session_dir = DATA_DIR / session
+
+    st = np.load(session_dir / 'spikes.times.npy', mmap_mode='r')
+    metrics = pd.read_parquet(session_dir / 'clusters.metrics.pqt')
+
+    cluster_ids = metrics['cluster_id'].tolist()
+    spike_count = st.size
+    duration = int(ceil(st[-1] + 1))
+    return {
+        'spike_count': spike_count,
+        'duration': duration,
+        'cluster_ids': cluster_ids,
+    }
 
 
 def get_context():
-    sessions = [session.name for session in sorted(DATA_DIR.iterdir())]
-    n_t = {session: get_spike_count_duration(session) for session in sessions}
     return {
-        'sessions': sessions,
-        'durations': {
-            session: n_t[session][1]
-            for session in sessions
-        },
-        'spike_count': {
-            session: n_t[session][0]
-            for session in sessions
-        },
+        'sessions': {
+            session.name: get_session_info(session) for session in sorted(DATA_DIR.iterdir())
+        }
     }
 
 
