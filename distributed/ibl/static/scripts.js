@@ -109,6 +109,15 @@ function clamp(x, min, max) {
 
 
 
+// Return the element of the array that is the closest from x.
+function closest(arr, x) {
+    return arr.reduce(function (prev, curr) {
+        return (Math.abs(curr - x) < Math.abs(prev - x) ? curr : prev);
+    });
+};
+
+
+
 /*************************************************************************************************/
 /*  Sliders                                                                                      */
 /*************************************************************************************************/
@@ -613,11 +622,6 @@ function setupDropdowns() {
         setRawImage();
     }
 
-    document.getElementById('clusterInput').onchange = function (e) {
-        window.params.cluster = parseInt(e.target.value);
-        setClusterImage();
-    }
-
     document.getElementById('selectColormap').onchange = function (e) {
         window.params.colormap = parseInt(e.target.value);
         updateParamsData();
@@ -645,6 +649,21 @@ function setupDropdowns() {
     document.getElementById('selectColormap').value = window.params.colormap;
     document.getElementById('selectColor').value = window.params.color;
     document.getElementById('selectAlpha').value = window.params.alpha;
+};
+
+
+
+function setupInputs() {
+
+    document.getElementById('clusterInput').onchange = function (e) {
+        var cl = parseInt(e.target.value);
+        var session_info = JS_CONTEXT["sessions"][window.params.eid];
+        cl = closest(session_info["cluster_ids"], cl);
+        e.target.value = cl;
+        window.params.cluster = cl;
+        setClusterImage();
+    };
+
 };
 
 
@@ -1003,6 +1022,7 @@ function load() {
 
     setupSliders();
     setupDropdowns();
+    setupInputs();
     setupButtons();
     setupRaster();
     setupRaw();
