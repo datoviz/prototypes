@@ -469,7 +469,7 @@ function updateDuration() {
 
 
 // Update the vertex data.
-function updateVertexData(eid) {
+function updateVertexData(eid, extra_requests) {
     window.params.eid = eid;
 
     // Update the raster plot
@@ -490,6 +490,7 @@ function updateVertexData(eid) {
             },
         ]
     };
+    requests["requests"].push(...extra_requests);
     requests["requests"].push(...recordJSON());
     document.documentElement.className = 'wait';
     submit(requests);
@@ -500,23 +501,28 @@ function updateVertexData(eid) {
 
 
 
+function paramsDataRequest() {
+    return {
+        "action": "upload",
+        "type": "dat",
+        "id": 12,
+        "content": {
+            "offset": 0,
+            "data": {
+                "mode": "base64",
+                "buffer": paramsData()
+            }
+        }
+    };
+}
+
+
 // Update the params data.
 function updateParamsData() {
     var contents = {
         "version": "1.0",
         "requests": [
-            {
-                "action": "upload",
-                "type": "dat",
-                "id": 12,
-                "content": {
-                    "offset": 0,
-                    "data": {
-                        "mode": "base64",
-                        "buffer": paramsData()
-                    }
-                }
-            },
+            paramsDataRequest(),
         ]
     };
     submit(contents);
@@ -629,7 +635,17 @@ function setupDropdowns() {
 
     document.getElementById('selectColor').onchange = function (e) {
         window.params.color = e.target.value;
-        updateVertexData(window.params.eid);
+
+        var extra_requests = [];
+
+        // HACK: if selecting quality, automatically select the qualmap colormap
+        if (window.params.color == "quality") {
+            document.getElementById('selectColormap').value = 124;
+            window.params.colormap = 124;
+            extra_requests = [paramsDataRequest()];
+        }
+
+        updateVertexData(window.params.eid, extra_requests);
     }
 
     document.getElementById('selectAlpha').onchange = function (e) {
