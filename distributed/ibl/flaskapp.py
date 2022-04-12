@@ -2,6 +2,7 @@
 # Imports
 # -------------------------------------------------------------------------------------------------
 
+import argparse
 import base64
 from pathlib import Path
 import logging
@@ -495,11 +496,12 @@ def cluster_plot(eid, cluster_id):
 
 
 if __name__ == '__main__':
-    socketio.on_namespace(RendererNamespace('/'))
-    socketio.run(app, '0.0.0.0', port=PORT)
 
-    # arr = get_array(
-    #     Bunch({'mode': 'ibl_ephys', 'session': {
-    #         'eid': '0851db85-2889-4070-ac18-a40e8ebd96ba'}
-    #     })
-    # )
+    parser = argparse.ArgumentParser(description='Launch the Flask server.')
+    parser.add_argument('--port', help='the TCP port')
+    args = parser.parse_args()
+
+    socketio.on_namespace(RendererNamespace('/'))
+    port = args.port or PORT
+    logger.info(f"Serving the Flask application on port {port}")
+    socketio.run(app, '0.0.0.0', port=port)
