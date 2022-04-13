@@ -31,7 +31,7 @@ const DEFAULT_PARAMS = {
     size_lims: [0.01, 10],
 
     time: 0,
-    duration: 0,
+    duration: 1,
     spike_count: 0,
     cluster: 0,
 
@@ -92,7 +92,22 @@ function show(arrbuf) {
     const blob = new Blob([arrbuf]);
     const url = URL.createObjectURL(blob);
     const img = document.getElementById('imgRaster');
-    img.src = url;
+    let w = img.offsetWidth;
+
+    // Update the raster plot
+    // const img = document.getElementById('imgRaster');
+    // img.src = url;
+
+    var t0 = px2time(0);
+    var t1 = px2time(w);
+    var t = .5 * (t0 + t1);
+
+    Plotly.update('imgRaster', {}, {
+        "images[0].source": url,
+        "xaxis.ticktext": [t0.toFixed(3), t.toFixed(3), t1.toFixed(3)],
+    });
+
+    setLineOffset();
 };
 
 
@@ -101,6 +116,11 @@ function scaleSize(x) {
     return 1 + Math.log(x);
 };
 
+
+
+function scaleAlpha(x) {
+    return 1 + .1 * Math.log(x);
+};
 
 
 function clamp(x, min, max) {
@@ -182,7 +202,7 @@ function paramsData() {
     ]);
 
     arr.set(0, "alpha_range", [p.alpha_range[0], scaleSize(p.zoom) * p.alpha_range[1]]);
-    arr.set(0, "size_range", [p.size_range[0], scaleSize(p.zoom) * p.size_range[1]]);
+    arr.set(0, "size_range", [p.size_range[0], scaleAlpha(p.zoom) * p.size_range[1]]);
     arr.set(0, "cmap_range", p.colormap_range);
     arr.set(0, "cmap_id", [p.colormap]);
 
@@ -697,14 +717,56 @@ function setupButtons() {
 
 function setupRaster() {
     const img = document.getElementById('imgRaster');
+
+    Plotly.newPlot('imgRaster', [],
+        {
+            images: [
+                {
+                    // "source": url,
+                    "xref": "x",
+                    "yref": "y",
+                    "x": 0,
+                    "y": 0,
+                    "sizex": window.params.duration,
+                    "sizey": 385,
+                    "opacity": 1,
+                    "xanchor": "left",
+                    "yanchor": "bottom",
+                    "sizing": "stretch",
+                    "layer": "below",
+                },
+            ],
+            xaxis: {
+                range: [0, window.params.duration],
+                tickmode: "array",
+                tickvals: [0, window.params.duration * .5, window.params.duration],
+                ticktext: ['0', (window.params.duration * .5).toFixed(3), window.params.duration.toFixed(3)],
+                showgrid: true,
+            },
+            yaxis: {
+                range: [0, 385],
+                showgrid: false,
+            },
+            margin: {
+                b: 30, t: 10, l: 30, r: 30, pad: 0
+            },
+            autosize: true,
+        },
+        {
+            scrollZoom: false,
+            staticPlot: true
+        });
+
     const line = document.getElementById('rasterLine');
+
+    // Waiting Pointer.
     document.documentElement.className = 'wait';
 
-    var x0 = $(img).offset().left;
-    var w = $(img).width();
+    // Raster image width.
+    var w = $(img).width() - 60;
 
-    line.style.height = (img.offsetHeight - 2) + "px";
-
+    line.style.top = 112 + "px";
+    line.style.height = (img.offsetHeight - 42) + "px";
 
     // Zooming.
     img.onwheel = function (e) {
@@ -735,22 +797,16 @@ function setupRaster() {
         }
     }
 
-
     // Update the vertical line position upon pan/zoom.
-    img.onload = function (e) {
-        setLineOffset();
-    }
     window.onresize = function (e) {
         line.style.height = (img.offsetHeight - 2) + "px";
         setLineOffset();
     }
 
-
     // Prevent image dragging.
     img.ondragstart = function (e) {
         e.preventDefault();
     }
-
 
     // Panning.
     var isPanning = false;
@@ -769,18 +825,18 @@ function setupRaster() {
         isPanning = false;
     }
 
-
     // Reset pan/zoom when double clicking.
     img.ondblclick = function (e) {
         reset();
     }
-
 
     // Draggable vertical line.
     $(line).draggable({
         axis: "x",
         containment: "#imgRaster",
         stop: function (e, ui) {
+            var x0 = $(img).offset().left + 30;
+
             // When dragging stops, selects the time and update the raw image.
             var offset = $(this).offset();
             var x = offset.left - x0;
@@ -936,7 +992,7 @@ function setupWebsocket() {
 
 function px2time(px) {
     const img = document.getElementById('imgRaster');
-    let w = img.width;
+    var w = $(img).width() - 60;
 
     x = px / w;
     x = clamp(x, 0, 1);
@@ -955,7 +1011,7 @@ function px2time(px) {
 
 function time2px(t) {
     const img = document.getElementById('imgRaster');
-    let w = img.width;
+    var w = $(img).width() - 60;
 
     // Scale by the duration to get the time.
     var p = window.params;
@@ -972,9 +1028,10 @@ function time2px(t) {
 
 
 function setLineOffset() {
+    console.log("hello");
     const img = document.getElementById('imgRaster');
-    var x0 = $(img).offset().left;
-    var w = $(img).width();
+    var x0 = $(img).offset().left + 30;
+    var w = $(img).width() - 60;
 
     const line = document.getElementById('rasterLine');
     $(line).offset({ left: x0 + time2px(window.params.time) });
