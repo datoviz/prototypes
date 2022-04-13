@@ -181,7 +181,7 @@ function paramsData() {
         ["cmap_id", "uint32", 1],
     ]);
 
-    arr.set(0, "alpha_range", p.alpha_range);
+    arr.set(0, "alpha_range", [p.alpha_range[0], scaleSize(p.zoom) * p.alpha_range[1]]);
     arr.set(0, "size_range", [p.size_range[0], scaleSize(p.zoom) * p.size_range[1]]);
     arr.set(0, "cmap_range", p.colormap_range);
     arr.set(0, "cmap_id", [p.colormap]);
@@ -490,7 +490,9 @@ function updateVertexData(eid, extra_requests) {
             },
         ]
     };
-    requests["requests"].push(...extra_requests);
+    if (extra_requests) {
+        requests["requests"].push(...extra_requests);
+    }
     requests["requests"].push(...recordJSON());
     document.documentElement.className = 'wait';
     submit(requests);
