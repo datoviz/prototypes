@@ -16,7 +16,7 @@ import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import png
-from flask import Flask, render_template, send_file, session
+from flask import Flask, render_template, send_file, session, request
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, Namespace, emit
 
@@ -311,7 +311,7 @@ class RendererNamespace(Namespace):
 # Raw ephys data server
 # -------------------------------------------------------------------------------------------------
 
-def get_img(eid, time=0):
+def get_img(eid, time=0, dt=TIME_HALF_WINDOW):
     time = float(time)
     assert 0 <= time <= 1e6
 
@@ -327,7 +327,6 @@ def get_img(eid, time=0):
     assert duration > 0
 
     sr = lossy.sample_rate
-    dt = TIME_HALF_WINDOW
     t = float(time)
     t = np.clip(t, dt, duration - dt)
 
@@ -376,7 +375,7 @@ def s2t(s):
     return s / float(SAMPLE_RATE)
 
 
-def get_spikes(eid, time=0):
+def get_spikes(eid, time=0, dt=TIME_HALF_WINDOW):
     time = float(time)
     assert 0 <= time <= 1e6
 
@@ -393,7 +392,6 @@ def get_spikes(eid, time=0):
     # Estimate the duration.
     duration = times[-1] + 1
 
-    dt = TIME_HALF_WINDOW
     t = float(time)
     t = np.clip(t, dt, duration - dt)
     t0, t1 = t-dt, t+dt
@@ -440,8 +438,11 @@ def get_spikes(eid, time=0):
 def serve_time_float(eid, time=None):
     if time == 'null':
         return ''
+    args = request.args
+    # Half of the window size (in seconds).
+    dt = args.get('dt', default=TIME_HALF_WINDOW, type=float)
     time = float(time)
-    img = get_img(eid, time=time)
+    img = get_img(eid, time=time, dt=dt)
     if img is not None:
         return send_image(img)
 
